@@ -11,7 +11,6 @@ Este proyecto implementa un sistema de chat en tiempo real utilizando tecnologí
 - **Caché distribuido** con Redis para sesiones y rendimiento
 - **Persistencia de datos** con PostgreSQL (PostGIS)
 - **Autenticación y seguridad** con JWT y Spring Security
-- **Monitoreo y observabilidad** con Prometheus, Grafana y exportadores
 
 ## 🏗️ Arquitectura
 
@@ -51,7 +50,6 @@ Este proyecto implementa un sistema de chat en tiempo real utilizando tecnologí
 - **Redis** (cache y pub/sub)
 - **RabbitMQ 3** con STOMP
 - **Docker & Docker Compose**
-- **Prometheus + Grafana** (monitoreo)
 - **Lombok** (reducción de boilerplate)
 - **JWT** (autenticación)
 
@@ -68,10 +66,7 @@ springboot-chat-backend/
 │   ├── Dockerfile
 │   └── pom.xml
 ├── docker-compose.yaml         # Orquestación de servicios
-├── env.local.sample           # Plantilla de variables de entorno
-└── monitoring/                # Configuración de monitoreo
-    ├── prometheus/
-    └── grafana/
+└── env.local.sample           # Plantilla de variables de entorno
 ```
 
 ## 🛠️ Configuración y Ejecución
@@ -128,13 +123,8 @@ cd Backend
 | RabbitMQ | 5672 | AMQP |
 | RabbitMQ Management | 15672 | UI de administración |
 | RabbitMQ STOMP | 61613 | WebSocket STOMP |
-| Prometheus | 9090 | Métricas |
-| Grafana | 3000 | Dashboards (admin/admin123) |
-| Node Exporter | 9100 | Métricas del sistema |
 | cAdvisor | 8082 | Métricas de contenedores |
 | Jenkins | 8080 | CI/CD |
-| Frontend | 80/443 | Aplicación web |
-| TileServer | 8081 | Servidor de mapas |
 
 ## 🔐 Seguridad
 
@@ -150,16 +140,11 @@ El proyecto implementa:
 
 El stack de monitoreo incluye:
 
-- **Prometheus**: Recolección de métricas
-- **Grafana**: Visualización de dashboards
-- **Node Exporter**: Métricas del host
 - **cAdvisor**: Métricas de contenedores Docker
 - **PostgreSQL Exporter**: Métricas de la base de datos
 - **Redis Exporter**: Métricas de Redis
 - **RabbitMQ Exporter**: Métricas de RabbitMQ
 - **Spring Actuator**: Métricas de la aplicación
-
-Accede a Grafana en `http://localhost:3000` (admin/admin123)
 
 ## 🧪 Testing
 
