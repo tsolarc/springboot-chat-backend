@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Unread Messages Test - Portfolio Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .panel {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #f9f9f9;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        h1 {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .message-card {
+            background-color: #fff;
+            border-left: 4px solid #4CAF50;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .message-sender {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .message-content {
+            margin-bottom: 5px;
+        }
+        .message-time {
+            font-size: 12px;
+            color: #888;
+            text-align: right;
+        }
+        .unread-badge {
+            display: inline-block;
+            background-color: #dc3545;
+            color: white;
+            border-radius: 10px;
+            padding: 0 8px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        .response-container {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #0275d8;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Portfolio Chat Unread Messages Test</h1>
+
+        <div class="nav-links">
+            <a href="websocket-test.html">WebSocket Test</a>
+            <a href="chat-history-test.html">Chat History Test</a>
+            <a href="unread-messages-test.html">Unread Messages Test</a>
+            <a href="message-crud-test.html">Message CRUD Test</a>
+        </div>
+
+        <!-- Panel para obtener mensajes no leídos -->
+        <div class="panel">
+            <h2>Obtener Mensajes No Leídos</h2>
+            <div class="form-group">
+                <label for="username">Nombre de Usuario:</label>
+                <input type="text" id="username" placeholder="Ingresa tu nombre de usuario">
+            </div>
+            <div class="form-group">
+                <label for="chatId">ID del Chat:</label>
+                <input type="number" id="chatId" placeholder="Ingresa el ID del chat">
+            </div>
+            <button id="getUnreadMessagesBtn">Obtener Mensajes No Leídos</button>
+
+            <div id="unreadMessagesResults" class="response-container"></div>
+        </div>
+
+        <!-- Panel para marcar mensajes como leídos -->
+        <div class="panel">
+            <h2>Marcar Mensaje como Leído</h2>
+            <div class="form-group">
+                <label for="readChatId">ID del Chat:</label>
+                <input type="number" id="readChatId" placeholder="Ingresa el ID del chat">
+            </div>
+            <div class="form-group">
+                <label for="messageId">ID del Mensaje:</label>
+                <input type="number" id="messageId" placeholder="Ingresa el ID del mensaje">
+            </div>
+            <div class="form-group">
+                <label for="userId">ID del Usuario:</label>
+                <input type="number" id="userId" placeholder="Ingresa tu ID de usuario">
+            </div>
+            <button id="markAsReadBtn">Marcar como Leído</button>
+
+            <div id="markAsReadResult"></div>
+        </div>
+
+        <!-- Panel para visualizar mensajes no leídos -->
+        <div class="panel">
+            <h2>Mensajes No Leídos</h2>
+            <div id="unreadMessagesContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Referencias a elementos del DOM
+        const usernameInput = document.getElementById('username');
+        const chatIdInput = document.getElementById('chatId');
+        const getUnreadMessagesBtn = document.getElementById('getUnreadMessagesBtn');
+        const unreadMessagesResults = document.getElementById('unreadMessagesResults');
+        const unreadMessagesContainer = document.getElementById('unreadMessagesContainer');
+
+        const readChatIdInput = document.getElementById('readChatId');
+        const messageIdInput = document.getElementById('messageId');
+        const userIdInput = document.getElementById('userId');
+        const markAsReadBtn = document.getElementById('markAsReadBtn');
+        const markAsReadResult = document.getElementById('markAsReadResult');
+
+        // Obtener mensajes no leídos
+        getUnreadMessagesBtn.addEventListener('click', async () => {
+            const username = usernameInput.value;
+            const chatId = chatIdInput.value;
+
+            if (!username || !chatId) {
+                alert('Por favor ingresa un nombre de usuario y un ID de chat');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/message/unread/${chatId}`, {
+                    headers: {
+                        'X-Authenticated-User': username
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const messages = await response.json();
+                unreadMessagesResults.innerHTML = `<pre>${JSON.stringify(messages, null, 2)}</pre>`;
+
+                // Mostrar mensajes en formato visual
+                displayUnreadMessages(messages);
+
+            } catch (error) {
+                console.error('Error:', error);
+                unreadMessagesResults.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        });
+
+        // Marcar mensaje como leído
+        markAsReadBtn.addEventListener('click', async () => {
+            const chatId = readChatIdInput.value;
+            const messageId = messageIdInput.value;
+            const userId = userIdInput.value;
+
+            if (!chatId || !messageId || !userId) {
+                alert('Todos los campos son requeridos');
+                return;
+            }
+
+            try {
+                // Crear un WebSocket para enviar la notificación de lectura
+                const socket = new SockJS('/dm');
+                const stompClient = Stomp.over(socket);
+
+                stompClient.connect({}, frame => {
+                    console.log('Conectado: ' + frame);
+
+                    // Enviar la notificación de mensaje leído
+                    const destination = `/app/chat/${chatId}/read/${messageId}`;
+                    const payload = {
+                        userId: parseInt(userId)
+                    };
+
+                    stompClient.send(destination, {}, JSON.stringify(payload));
+
+                    markAsReadResult.innerHTML = `<p style="color: green;">Mensaje enviado para marcar como leído</p>`;
+
+                    // Desconectar después de enviar
+                    setTimeout(() => {
+                        stompClient.disconnect();
+                    }, 1000);
+                });
+
+            } catch (error) {
+                console.error('Error:', error);
+                markAsReadResult.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        });
+
+        // Mostrar mensajes no leídos en formato visual
+        function displayUnreadMessages(messages) {
+            unreadMessagesContainer.innerHTML = '';
+
+            if (!Array.isArray(messages) || messages.length === 0) {
+                unreadMessagesContainer.innerHTML = '<p>No hay mensajes no leídos.</p>';
+                return;
+            }
+
+            messages.forEach(message => {
+                const messageCard = document.createElement('div');
+                messageCard.className = 'message-card';
+
+                const sender = document.createElement('div');
+                sender.className = 'message-sender';
+                sender.innerHTML = `Usuario ID: ${message.senderId || 'Desconocido'} <span class="unread-badge">No leído</span>`;
+
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                content.textContent = message.content || '(Sin contenido)';
+
+                const time = document.createElement('div');
+                time.className = 'message-time';
+                time.textContent = new Date(message.timestamp || message.sendedAt).toLocaleString();
+
+                messageCard.appendChild(sender);
+                messageCard.appendChild(content);
+                messageCard.appendChild(time);
+                unreadMessagesContainer.appendChild(messageCard);
+            });
+        }
+    </script>
+
+    <!-- Cargar las bibliotecas SockJS y STOMP para la funcionalidad de marcar como leído -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+</body>
+</html>

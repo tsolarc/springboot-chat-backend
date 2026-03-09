@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Message CRUD Test - Portfolio Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .panel {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #f9f9f9;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        h1 {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            padding: 10px 15px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 5px;
+        }
+        .button-green {
+            background-color: #4CAF50;
+        }
+        .button-green:hover {
+            background-color: #45a049;
+        }
+        .button-blue {
+            background-color: #007bff;
+        }
+        .button-blue:hover {
+            background-color: #0069d9;
+        }
+        .button-red {
+            background-color: #dc3545;
+        }
+        .button-red:hover {
+            background-color: #c82333;
+        }
+        .response-container {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+        .success {
+            color: #155724;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .error {
+            color: #721c24;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #0275d8;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Portfolio Chat Message CRUD Test</h1>
+
+        <div class="nav-links">
+            <a href="websocket-test.html">WebSocket Test</a>
+            <a href="chat-history-test.html">Chat History Test</a>
+            <a href="unread-messages-test.html">Unread Messages Test</a>
+            <a href="message-crud-test.html">Message CRUD Test</a>
+        </div>
+
+        <!-- Panel para crear mensaje -->
+        <div class="panel">
+            <h2>Crear Mensaje (POST)</h2>
+            <div class="form-group">
+                <label for="chatId">ID del Chat:</label>
+                <input type="number" id="chatId" placeholder="Ingresa el ID del chat">
+            </div>
+            <div class="form-group">
+                <label for="senderId">ID del Remitente:</label>
+                <input type="number" id="senderId" placeholder="Ingresa el ID del remitente">
+            </div>
+            <div class="form-group">
+                <label for="content">Contenido:</label>
+                <textarea id="content" placeholder="Escribe el contenido del mensaje"></textarea>
+            </div>
+            <button id="createMessageBtn" class="button-green">Crear Mensaje</button>
+
+            <div id="createResponse" class="response-container"></div>
+        </div>
+
+        <!-- Panel para editar mensaje -->
+        <div class="panel">
+            <h2>Editar Mensaje (PUT)</h2>
+            <div class="form-group">
+                <label for="editMessageId">ID del Mensaje:</label>
+                <input type="number" id="editMessageId" placeholder="Ingresa el ID del mensaje a editar">
+            </div>
+            <div class="form-group">
+                <label for="editContent">Nuevo Contenido:</label>
+                <textarea id="editContent" placeholder="Escribe el nuevo contenido del mensaje"></textarea>
+            </div>
+            <button id="editMessageBtn" class="button-blue">Editar Mensaje</button>
+
+            <div id="editResponse" class="response-container"></div>
+        </div>
+
+        <!-- Panel para eliminar mensaje -->
+        <div class="panel">
+            <h2>Eliminar Mensaje (DELETE)</h2>
+            <div class="form-group">
+                <label for="deleteMessageId">ID del Mensaje:</label>
+                <input type="number" id="deleteMessageId" placeholder="Ingresa el ID del mensaje a eliminar">
+            </div>
+            <button id="deleteMessageBtn" class="button-red">Eliminar Mensaje</button>
+
+            <div id="deleteResponse" class="response-container"></div>
+        </div>
+
+        <!-- Panel para probar creación de chat privado -->
+        <div class="panel">
+            <h2>Crear Chat Privado (POST)</h2>
+            <div class="form-group">
+                <label for="user1Id">ID del Usuario 1:</label>
+                <input type="number" id="user1Id" placeholder="Ingresa el ID del primer usuario">
+            </div>
+            <div class="form-group">
+                <label for="user2Id">ID del Usuario 2:</label>
+                <input type="number" id="user2Id" placeholder="Ingresa el ID del segundo usuario">
+            </div>
+            <button id="createChatBtn" class="button-green">Crear Chat</button>
+
+            <div id="createChatResponse" class="response-container"></div>
+        </div>
+
+        <!-- Panel para obtener o crear chat directo -->
+        <div class="panel">
+            <h2>Obtener/Crear Chat Directo (GET)</h2>
+            <div class="form-group">
+                <label for="currentUserId">ID del Usuario Actual:</label>
+                <input type="number" id="currentUserId" placeholder="Ingresa tu ID de usuario">
+            </div>
+            <div class="form-group">
+                <label for="submitterUserId">ID del Usuario Destinatario:</label>
+                <input type="number" id="submitterUserId" placeholder="Ingresa el ID del usuario destinatario">
+            </div>
+            <button id="getDirectChatBtn" class="button-blue">Obtener Chat</button>
+
+            <div id="directChatResponse" class="response-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // Referencias a elementos del DOM - Crear mensaje
+        const chatIdInput = document.getElementById('chatId');
+        const senderIdInput = document.getElementById('senderId');
+        const contentInput = document.getElementById('content');
+        const createMessageBtn = document.getElementById('createMessageBtn');
+        const createResponse = document.getElementById('createResponse');
+
+        // Referencias a elementos del DOM - Editar mensaje
+        const editMessageIdInput = document.getElementById('editMessageId');
+        const editContentInput = document.getElementById('editContent');
+        const editMessageBtn = document.getElementById('editMessageBtn');
+        const editResponse = document.getElementById('editResponse');
+
+        // Referencias a elementos del DOM - Eliminar mensaje
+        const deleteMessageIdInput = document.getElementById('deleteMessageId');
+        const deleteMessageBtn = document.getElementById('deleteMessageBtn');
+        const deleteResponse = document.getElementById('deleteResponse');
+
+        // Referencias a elementos del DOM - Crear chat privado
+        const user1IdInput = document.getElementById('user1Id');
+        const user2IdInput = document.getElementById('user2Id');
+        const createChatBtn = document.getElementById('createChatBtn');
+        const createChatResponse = document.getElementById('createChatResponse');
+
+        // Referencias a elementos del DOM - Obtener chat directo
+        const currentUserIdInput = document.getElementById('currentUserId');
+        const submitterUserIdInput = document.getElementById('submitterUserId');
+        const getDirectChatBtn = document.getElementById('getDirectChatBtn');
+        const directChatResponse = document.getElementById('directChatResponse');
+
+        // Crear mensaje
+        createMessageBtn.addEventListener('click', async () => {
+            const chatId = chatIdInput.value;
+            const senderId = senderIdInput.value;
+            const content = contentInput.value;
+
+            if (!chatId || !senderId || !content) {
+                alert('Todos los campos son requeridos');
+                return;
+            }
+
+            const messageData = {
+                chatId: parseInt(chatId),
+                senderId: parseInt(senderId),
+                content: content,
+                timestamp: new Date().toISOString()
+            };
+
+            try {
+                const response = await fetch('/message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(messageData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                createResponse.innerHTML = `
+                    <div class="success">
+                        Mensaje enviado exitosamente. Código de respuesta: ${response.status}
+                    </div>
+                    <pre>Payload enviado: ${JSON.stringify(messageData, null, 2)}</pre>
+                `;
+
+                // Limpiar el campo de contenido
+                contentInput.value = '';
+
+            } catch (error) {
+                console.error('Error:', error);
+                createResponse.innerHTML = `
+                    <div class="error">
+                        Error: ${error.message}
+                    </div>
+                `;
+            }
+        });
+
+        // Editar mensaje
+        editMessageBtn.addEventListener('click', async () => {
+            const messageId = editMessageIdInput.value;
+            const content = editContentInput.value;
+
+            if (!messageId || !content) {
+                alert('Todos los campos son requeridos');
+                return;
+            }
+
+            const editData = {
+                content: content,
+                editedAt: new Date().toISOString()
+            };
+
+            try {
+                const response = await fetch(`/message/${messageId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(editData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                editResponse.innerHTML = `
+                    <div class="success">
+                        Mensaje editado exitosamente. Código de respuesta: ${response.status}
+                    </div>
+                    <pre>Payload enviado: ${JSON.stringify(editData, null, 2)}</pre>
+                `;
+
+                // Limpiar el campo de contenido
+                editContentInput.value = '';
+
+            } catch (error) {
+                console.error('Error:', error);
+                editResponse.innerHTML = `
+                    <div class="error">
+                        Error: ${error.message}
+                    </div>
+                `;
+            }
+        });
+
+        // Eliminar mensaje
+        deleteMessageBtn.addEventListener('click', async () => {
+            const messageId = deleteMessageIdInput.value;
+
+            if (!messageId) {
+                alert('El ID del mensaje es requerido');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/message/${messageId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                deleteResponse.innerHTML = `
+                    <div class="success">
+                        Mensaje eliminado exitosamente. Código de respuesta: ${response.status}
+                    </div>
+                `;
+
+                // Limpiar el campo
+                deleteMessageIdInput.value = '';
+
+            } catch (error) {
+                console.error('Error:', error);
+                deleteResponse.innerHTML = `
+                    <div class="error">
+                        Error: ${error.message}
+                    </div>
+                `;
+            }
+        });
+
+        // Crear chat privado
+        createChatBtn.addEventListener('click', async () => {
+            const user1Id = user1IdInput.value;
+            const user2Id = user2IdInput.value;
+
+            if (!user1Id || !user2Id) {
+                alert('Ambos IDs de usuario son requeridos');
+                return;
+            }
+
+            const chatData = {
+                user1Id: parseInt(user1Id),
+                user2Id: parseInt(user2Id)
+            };
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(chatData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const chatResult = await response.json();
+                createChatResponse.innerHTML = `
+                    <div class="success">
+                        Chat creado exitosamente.
+                    </div>
+                    <pre>${JSON.stringify(chatResult, null, 2)}</pre>
+                `;
+
+            } catch (error) {
+                console.error('Error:', error);
+                createChatResponse.innerHTML = `
+                    <div class="error">
+                        Error: ${error.message}
+                    </div>
+                `;
+            }
+        });
+
+        // Obtener chat directo
+        getDirectChatBtn.addEventListener('click', async () => {
+            const currentUserId = currentUserIdInput.value;
+            const submitterUserId = submitterUserIdInput.value;
+
+            if (!currentUserId || !submitterUserId) {
+                alert('Ambos IDs de usuario son requeridos');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/chat/direct/${submitterUserId}`, {
+                    headers: {
+                        'X-User-Id': currentUserId
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const chatResult = await response.json();
+                directChatResponse.innerHTML = `
+                    <div class="success">
+                        Chat obtenido exitosamente.
+                    </div>
+                    <pre>${JSON.stringify(chatResult, null, 2)}</pre>
+                `;
+
+            } catch (error) {
+                console.error('Error:', error);
+                directChatResponse.innerHTML = `
+                    <div class="error">
+                        Error: ${error.message}
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -94,7 +94,7 @@ JWT_EXPIRATION_DATE=900000  # 15 minutos
 # Database Configuration (para desarrollo local)
 DB_USER=postgres
 DB_PASSWORD=1234
-DATABASE_URL=jdbc:postgresql://localhost:5432/BeatMap_BDD
+DATABASE_URL=jdbc:postgresql://localhost:5432/chat_portfolio_db
 ```
 
 ### Ejecutar con Docker Compose
@@ -189,4 +189,4 @@ Este proyecto está bajo licencia MIT.
 
 ## 👥 Autores
 
-- BeatMap Team
+- Portfolio Owner

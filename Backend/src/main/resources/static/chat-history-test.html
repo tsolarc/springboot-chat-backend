@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat History Test - Portfolio Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .panel {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #f9f9f9;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        h1 {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .message-card {
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .message-sender {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .message-content {
+            margin-bottom: 5px;
+        }
+        .message-time {
+            font-size: 12px;
+            color: #888;
+            text-align: right;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .pagination button {
+            background-color: #f1f1f1;
+            color: #333;
+            border: 1px solid #ddd;
+            padding: 8px 16px;
+            margin: 0 4px;
+        }
+        .pagination button.active {
+            background-color: #4CAF50;
+            color: white;
+            border: 1px solid #4CAF50;
+        }
+        .pagination button:hover:not(.active) {
+            background-color: #ddd;
+        }
+        .response-container {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #0275d8;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Portfolio Chat History Test</h1>
+
+        <div class="nav-links">
+            <a href="websocket-test.html">WebSocket Test</a>
+            <a href="chat-history-test.html">Chat History Test</a>
+            <a href="unread-messages-test.html">Unread Messages Test</a>
+            <a href="message-crud-test.html">Message CRUD Test</a>
+        </div>
+
+        <!-- Panel para obtener historial completo -->
+        <div class="panel">
+            <h2>Obtener Historial Completo</h2>
+            <div class="form-group">
+                <label for="chatIdComplete">ID del Chat:</label>
+                <input type="number" id="chatIdComplete" placeholder="Ingresa el ID del chat">
+            </div>
+            <button id="getCompleteHistoryBtn">Obtener Historial Completo</button>
+            <div id="completeHistoryResults"></div>
+        </div>
+
+        <!-- Panel para historial paginado -->
+        <div class="panel">
+            <h2>Obtener Historial Paginado</h2>
+            <div class="form-group">
+                <label for="chatIdPaginated">ID del Chat:</label>
+                <input type="number" id="chatIdPaginated" placeholder="Ingresa el ID del chat">
+            </div>
+            <div class="form-group">
+                <label for="page">Página:</label>
+                <input type="number" id="page" value="0" min="0">
+            </div>
+            <div class="form-group">
+                <label for="size">Tamaño de página:</label>
+                <input type="number" id="size" value="10" min="1" max="100">
+            </div>
+            <div class="form-group">
+                <label for="sortBy">Ordenar por:</label>
+                <select id="sortBy">
+                    <option value="sendedAt">Fecha de envío</option>
+                    <option value="id">ID del mensaje</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="direction">Dirección:</label>
+                <select id="direction">
+                    <option value="desc">Descendente (más reciente primero)</option>
+                    <option value="asc">Ascendente (más antiguo primero)</option>
+                </select>
+            </div>
+            <button id="getPaginatedHistoryBtn">Obtener Historial Paginado</button>
+
+            <div id="paginatedHistoryResults" class="response-container"></div>
+
+            <div class="pagination" id="pagination">
+                <!-- Botones de paginación se generarán dinámicamente -->
+            </div>
+        </div>
+
+        <!-- Panel para visualizar mensajes -->
+        <div class="panel">
+            <h2>Mensajes</h2>
+            <div id="messagesContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Referencias a elementos del DOM
+        const chatIdCompleteInput = document.getElementById('chatIdComplete');
+        const getCompleteHistoryBtn = document.getElementById('getCompleteHistoryBtn');
+        const completeHistoryResults = document.getElementById('completeHistoryResults');
+
+        const chatIdPaginatedInput = document.getElementById('chatIdPaginated');
+        const pageInput = document.getElementById('page');
+        const sizeInput = document.getElementById('size');
+        const sortBySelect = document.getElementById('sortBy');
+        const directionSelect = document.getElementById('direction');
+        const getPaginatedHistoryBtn = document.getElementById('getPaginatedHistoryBtn');
+        const paginatedHistoryResults = document.getElementById('paginatedHistoryResults');
+        const paginationContainer = document.getElementById('pagination');
+        const messagesContainer = document.getElementById('messagesContainer');
+
+        // Variables globales
+        let currentPage = 0;
+        let totalPages = 0;
+        let currentChatId = null;
+
+        // Obtener historial completo
+        getCompleteHistoryBtn.addEventListener('click', async () => {
+            const chatId = chatIdCompleteInput.value;
+            if (!chatId) {
+                alert('Por favor ingresa un ID de chat válido');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/chat/${chatId}/messages`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const messages = await response.json();
+                completeHistoryResults.innerHTML = `<pre>${JSON.stringify(messages, null, 2)}</pre>`;
+
+                // Mostrar mensajes en formato visual
+                displayMessages(messages);
+
+            } catch (error) {
+                console.error('Error:', error);
+                completeHistoryResults.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        });
+
+        // Obtener historial paginado
+        getPaginatedHistoryBtn.addEventListener('click', async () => {
+            const chatId = chatIdPaginatedInput.value;
+            if (!chatId) {
+                alert('Por favor ingresa un ID de chat válido');
+                return;
+            }
+
+            currentChatId = chatId;
+            currentPage = parseInt(pageInput.value) || 0;
+            const size = parseInt(sizeInput.value) || 10;
+            const sortBy = sortBySelect.value;
+            const direction = directionSelect.value;
+
+            await fetchPaginatedHistory(chatId, currentPage, size, sortBy, direction);
+        });
+
+        // Función para obtener historial paginado
+        async function fetchPaginatedHistory(chatId, page, size, sortBy, direction) {
+            try {
+                const url = `/message/${chatId}/messages?page=${page}&size=${size}&sortBy=${sortBy}&direction=${direction}`;
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const pageData = await response.json();
+                paginatedHistoryResults.innerHTML = `<pre>${JSON.stringify(pageData, null, 2)}</pre>`;
+
+                // Actualizar paginación
+                totalPages = pageData.totalPages;
+                updatePagination(page, totalPages);
+
+                // Mostrar mensajes en formato visual
+                displayMessages(pageData.content);
+
+            } catch (error) {
+                console.error('Error:', error);
+                paginatedHistoryResults.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Actualizar controles de paginación
+        function updatePagination(currentPage, totalPages) {
+            paginationContainer.innerHTML = '';
+
+            // Botón anterior
+            const prevButton = document.createElement('button');
+            prevButton.textContent = 'Anterior';
+            prevButton.disabled = currentPage <= 0;
+            prevButton.addEventListener('click', () => {
+                if (currentPage > 0) {
+                    pageInput.value = currentPage - 1;
+                    getPaginatedHistoryBtn.click();
+                }
+            });
+            paginationContainer.appendChild(prevButton);
+
+            // Números de página
+            const maxButtons = 5;
+            const startPage = Math.max(0, currentPage - Math.floor(maxButtons / 2));
+            const endPage = Math.min(totalPages - 1, startPage + maxButtons - 1);
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.textContent = i + 1;
+                pageButton.classList.toggle('active', i === currentPage);
+                pageButton.addEventListener('click', () => {
+                    pageInput.value = i;
+                    getPaginatedHistoryBtn.click();
+                });
+                paginationContainer.appendChild(pageButton);
+            }
+
+            // Botón siguiente
+            const nextButton = document.createElement('button');
+            nextButton.textContent = 'Siguiente';
+            nextButton.disabled = currentPage >= totalPages - 1;
+            nextButton.addEventListener('click', () => {
+                if (currentPage < totalPages - 1) {
+                    pageInput.value = currentPage + 1;
+                    getPaginatedHistoryBtn.click();
+                }
+            });
+            paginationContainer.appendChild(nextButton);
+        }
+
+        // Mostrar mensajes en formato visual
+        function displayMessages(messages) {
+            messagesContainer.innerHTML = '';
+
+            if (!Array.isArray(messages) || messages.length === 0) {
+                messagesContainer.innerHTML = '<p>No hay mensajes para mostrar.</p>';
+                return;
+            }
+
+            messages.forEach(message => {
+                const messageCard = document.createElement('div');
+                messageCard.className = 'message-card';
+
+                const sender = document.createElement('div');
+                sender.className = 'message-sender';
+                sender.textContent = `Usuario ID: ${message.senderId || 'Desconocido'}`;
+
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                content.textContent = message.content || '(Sin contenido)';
+
+                const time = document.createElement('div');
+                time.className = 'message-time';
+                time.textContent = new Date(message.timestamp || message.sendedAt).toLocaleString();
+
+                messageCard.appendChild(sender);
+                messageCard.appendChild(content);
+                messageCard.appendChild(time);
+                messagesContainer.appendChild(messageCard);
+            });
+        }
+    </script>
+</body>
+</html>

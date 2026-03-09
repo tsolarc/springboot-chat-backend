@@ -1,0 +1,177 @@
+services:
+  backend:
+    build: './Backend'
+    container_name: 'beatmap-backend'
+    ports:
+      - '8000:8000'
+      - '8443:8443'
+    environment:
+      - 'SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/BeatMap_BDD'
+      - 'SPRING_DATASOURCE_USERNAME=postgres'
+      - 'SPRING_DATASOURCE_PASSWORD=1234'
+      - 'SPRING_DATA_REDIS_HOST=redis'
+      - 'SPRING_DATA_REDIS_PORT=6379'
+      - 'SPRING_DATA_REDIS_PASSWORD=1234'
+    volumes:
+      - '/etc/letsencrypt/archive/beatmap.cl:/certs:ro'
+    depends_on:
+      - 'db'
+
+  jenkins:
+    image: 'jenkins/jenkins:lts-jdk17'
+    container_name: 'jenkins'
+    ports:
+      - "8080"
+
+  frontend:
+    build: './Frontend'
+    container_name: 'beatmap-landing'
+    ports:
+      - "80:80"
+      - "443:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - './Frontend/httpd-ssl.conf:/usr/local/apache2/conf/extra/httpd-ssl.conf:ro'
+      - '/etc/letsencrypt:/etc/letsencrypt:ro'
+    restart: unless-stopped
+    depends_on:
+      - 'jenkins'
+
+  db:
+    image: 'postgis/postgis:16-3.5'
+    container_name: 'beatmap-db'
+    environment:
+      - 'POSTGRES_DB=BeatMap_BDD'
+      - 'POSTGRES_PASSWORD=1234'
+      - 'POSTGRES_USER=postgres'
+    ports:
+      - '5432:5432'
+    volumes:
+      - '/var/lib/postgresql/data'
+      - './db-init:/docker-entrypoint-initdb.d:ro'
+
+  rabbitmq:
+    image: 'rabbitmq:3-management'
+    environment:
+      RABBITMQ_DEFAULT_USER: postgres
+      RABBITMQ_DEFAULT_PASS: 1234
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+      - "61613:61613"
+    command: bash -c "rabbitmq-plugins enable rabbitmq_stomp && rabbitmq-server"
+
+  redis:
+    image: 'redis:latest'
+    command: redis-server --requirepass 1234
+    ports:
+      - '6379:6379'
+
+  tileserver:
+    image: 'maptiler/tileserver-gl'
+    container_name: 'beatmap-tileserver'
+    ports:
+      - '8081:8080'
+    volumes:
+      - './osm:/data:ro'
+    restart: 'unless-stopped'
+
+  # ================== MONITOREO ==================
+  prometheus:
+    image: 'prom/prometheus:latest'
+    container_name: 'beatmap-prometheus'
+    volumes:
+      - './monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro'
+    command: [ "--config.file=/etc/prometheus/prometheus.yml" ]
+    ports:
+      - '9090:9090'
+    restart: 'unless-stopped'
+    depends_on:
+      - 'backend'
+      - 'db'
+      - 'redis'
+      - 'rabbitmq'
+
+  grafana:
+      image: 'grafana/grafana:latest'
+      container_name: 'beatmap-grafana'
+      environment:
+        - 'GF_SECURITY_ADMIN_USER=admin'
+        - 'GF_SECURITY_ADMIN_PASSWORD=admin123'
+        - 'GF_PATHS_PROVISIONING=/etc/grafana/provisioning'
+      volumes:
+        - 'grafana-data:/var/lib/grafana'
+        - './monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro'
+      ports:
+        - '3000:3000'
+      restart: 'unless-stopped'
+      depends_on:
+        - 'prometheus'
+
+  node-exporter:
+      image: 'prom/node-exporter:latest'
+      container_name: 'beatmap-node-exporter'
+      ports:
+        - "9100:9100"
+      volumes:
+        - '/proc:/host/proc:ro'
+        - '/sys:/host/sys:ro'
+        - '/:/rootfs:ro'
+      command:
+        - '--path.procfs=/host/proc'
+        - '--path.sysfs=/host/sys'
+        - '--path.rootfs=/rootfs'
+        - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+      restart: 'unless-stopped'
+
+  cadvisor:
+      image: 'gcr.io/cadvisor/cadvisor:latest'
+      container_name: 'beatmap-cadvisor'
+      ports:
+        - '8082:8080'
+      volumes:
+        - '/:/rootfs:ro'
+        - '/var/run:/var/run:ro'
+        - '/sys:/sys:ro'
+        - '/var/lib/docker/:/var/lib/docker:ro'
+      restart: 'unless-stopped'
+
+  postgres-exporter:
+      image: 'prometheuscommunity/postgres-exporter:latest'
+      container_name: 'beatmap-postgres-exporter'
+      environment:
+        - 'DATA_SOURCE_NAME=postgresql://postgres:1234@db:5432/BeatMap_BDD?sslmode=disable'
+      ports:
+        - '9187:9187'
+      depends_on:
+        - 'db'
+      restart: 'unless-stopped'
+
+  redis-exporter:
+      image: 'oliver006/redis_exporter:latest'
+      container_name: 'beatmap-redis-exporter'
+      environment:
+        - 'REDIS_ADDR=redis:6379'
+        # - REDIS_PASSWORD=
+      ports:
+        - '9121:9121'
+      depends_on:
+        - 'redis'
+      restart: 'unless-stopped'
+
+  rabbitmq-exporter:
+      image: 'kbudde/rabbitmq-exporter:latest'
+      container_name: 'beatmap-rabbitmq-exporter'
+      environment:
+        - 'RABBIT_URL=http://rabbitmq:15672'
+        - 'RABBIT_USER=postgres'
+        - 'RABBIT_PASSWORD=1234'
+      ports:
+        - '9419:9419'
+      depends_on:
+        - 'rabbitmq'
+      restart: 'unless-stopped'
+
+volumes:
+    grafana-data:

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket Test - Portfolio Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .panel {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"], textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .log-area {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .message-list {
+            padding: 0;
+            margin: 0;
+            list-style-type: none;
+        }
+        .message-list li {
+            padding: 8px;
+            margin-bottom: 5px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Portfolio Chat WebSocket Test</h1>
+
+        <div class="panel">
+            <h2>Conexión WebSocket</h2>
+            <div class="form-group">
+                <label for="serverUrl">URL del servidor:</label>
+                <input type="text" id="serverUrl" value="http://localhost:8001/dm">
+            </div>
+            <button id="connectBtn">Conectar</button>
+            <button id="disconnectBtn" disabled>Desconectar</button>
+            <div id="connectionStatus" class="status disconnected">Desconectado</div>
+        </div>
+
+        <div class="panel">
+            <h2>Suscripción a Topic</h2>
+            <div class="form-group">
+                <label for="topicId">ID del Chat:</label>
+                <input type="number" id="topicId">
+            </div>
+            <button id="subscribeBtn" disabled>Suscribirse</button>
+            <button id="unsubscribeBtn" disabled>Cancelar Suscripción</button>
+        </div>
+
+        <div class="panel">
+            <h2>Envío de Mensajes</h2>
+            <div class="form-group">
+                <label for="chatId">ID del Chat:</label>
+                <input type="number" id="chatId">
+            </div>
+            <div class="form-group">
+                <label for="senderId">ID del Remitente:</label>
+                <input type="number" id="senderId">
+            </div>
+            <div class="form-group">
+                <label for="messageContent">Mensaje:</label>
+                <textarea id="messageContent" rows="3"></textarea>
+            </div>
+            <button id="sendBtn" disabled>Enviar Mensaje</button>
+        </div>
+
+        <div class="panel">
+            <h2>Estado de Escritura</h2>
+            <div class="form-group">
+                <label for="typingChatId">ID del Chat:</label>
+                <input type="number" id="typingChatId">
+            </div>
+            <div class="form-group">
+                <label for="typingUserId">ID del Usuario:</label>
+                <input type="number" id="typingUserId">
+            </div>
+            <div class="form-group">
+                <label for="typingStatus">Estado de Escritura:</label>
+                <select id="typingStatus">
+                    <option value="true">Escribiendo</option>
+                    <option value="false">No escribiendo</option>
+                </select>
+            </div>
+            <button id="sendTypingBtn" disabled>Enviar Estado de Escritura</button>
+        </div>
+
+        <div class="panel">
+            <h2>Mensajes Recibidos</h2>
+            <ul id="messagesList" class="message-list"></ul>
+        </div>
+
+        <div class="panel">
+            <h2>Logs</h2>
+            <div id="logArea" class="log-area"></div>
+        </div>
+    </div>
+
+    <!-- Cargar las bibliotecas SockJS y STOMP -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+
+    <script>
+        // Referencias a elementos del DOM
+        const serverUrlInput = document.getElementById('serverUrl');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const topicIdInput = document.getElementById('topicId');
+        const subscribeBtn = document.getElementById('subscribeBtn');
+        const unsubscribeBtn = document.getElementById('unsubscribeBtn');
+        const chatIdInput = document.getElementById('chatId');
+        const senderIdInput = document.getElementById('senderId');
+        const messageContentInput = document.getElementById('messageContent');
+        const sendBtn = document.getElementById('sendBtn');
+        const messagesList = document.getElementById('messagesList');
+        const logArea = document.getElementById('logArea');
+
+        // Variables globales
+        let stompClient = null;
+        let subscription = null;
+
+        // Función para agregar logs
+        function addLog(message) {
+            const logItem = document.createElement('div');
+            logItem.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+            logArea.appendChild(logItem);
+            logArea.scrollTop = logArea.scrollHeight;
+            console.log(message); // También mostrar en consola
+        }
+
+        // Función para mostrar mensajes recibidos
+        function displayMessage(message) {
+            const messageItem = document.createElement('li');
+
+            // Formatear el mensaje para visualización
+            const messageContent = typeof message === 'string' ? message : JSON.stringify(message, null, 2);
+            messageItem.textContent = messageContent;
+
+            messagesList.appendChild(messageItem);
+        }
+
+        // Conectar al WebSocket
+        connectBtn.addEventListener('click', function() {
+            const serverUrl = serverUrlInput.value;
+
+            addLog(`Intentando conectar a ${serverUrl}...`);
+
+            // Crear conexión SockJS
+            const socket = new SockJS(serverUrl);
+            stompClient = Stomp.over(socket);
+            socket.withCredentials = true;
+
+            // Configurar logs de STOMP (opcional)
+            stompClient.debug = function(str) {
+                addLog(str);
+            };
+
+            // Conectar
+            stompClient.connect({},
+                // Callback de éxito
+                function(frame) {
+                    addLog('Conectado: ' + frame);
+                    connectionStatus.textContent = 'Conectado';
+                    connectionStatus.className = 'status connected';
+
+                    // Actualizar estado de botones
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    subscribeBtn.disabled = false;
+                    sendBtn.disabled = false;
+                },
+                // Callback de error
+                function(error) {
+                    addLog('Error de conexión: ' + error);
+                    connectionStatus.textContent = 'Error: ' + error;
+                    connectionStatus.className = 'status disconnected';
+                }
+            );
+        });
+
+        // Desconectar
+        disconnectBtn.addEventListener('click', function() {
+            if (stompClient) {
+                stompClient.disconnect(function() {
+                    addLog('Desconectado');
+                    connectionStatus.textContent = 'Desconectado';
+                    connectionStatus.className = 'status disconnected';
+
+                    // Actualizar estado de botones
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    subscribeBtn.disabled = true;
+                    unsubscribeBtn.disabled = true;
+                    sendBtn.disabled = true;
+                });
+
+                stompClient = null;
+                subscription = null;
+            }
+        });
+
+        // Suscribirse a un topic
+        subscribeBtn.addEventListener('click', function() {
+            if (stompClient && !subscription) {
+                const topicId = topicIdInput.value;
+                if (!topicId) {
+                    addLog('Error: Ingresa un ID de chat válido');
+                    return;
+                }
+
+                const topic = `/topic/chat${topicId}`;
+                addLog(`Suscribiéndose a ${topic}...`);
+
+                subscription = stompClient.subscribe(topic, function(message) {
+                    addLog('Mensaje recibido');
+                    try {
+                        const body = JSON.parse(message.body);
+                        displayMessage(body);
+                    } catch (e) {
+                        displayMessage(message.body);
+                    }
+                });
+
+                addLog(`Suscrito a ${topic}`);
+                unsubscribeBtn.disabled = false;
+            }
+        });
+
+        // Cancelar suscripción
+        unsubscribeBtn.addEventListener('click', function() {
+            if (subscription) {
+                subscription.unsubscribe();
+                addLog('Suscripción cancelada');
+                subscription = null;
+                unsubscribeBtn.disabled = true;
+            }
+        });
+
+        // Enviar mensaje
+        sendBtn.addEventListener('click', function() {
+            if (stompClient) {
+                const chatId = chatIdInput.value;
+                const senderId = senderIdInput.value;
+                const content = messageContentInput.value;
+
+                if (!chatId || !content) {
+                    addLog('Error: Completa todos los campos necesarios');
+                    return;
+                }
+
+                // Crear objeto de mensaje según MessageDTO
+                const message = {
+                    chatId: parseInt(chatId),
+                    content: content,
+                    sender: { id: parseInt(senderId) },
+                    type: 'TEXT',
+                    sendedAt: new Date()
+                };
+
+                const destination = `/app/chat/${chatId}/send`;
+                addLog(`Enviando mensaje a ${destination}: ${JSON.stringify(message)}`);
+
+                stompClient.send(destination, {}, JSON.stringify(message));
+                messageContentInput.value = ''; // Limpiar campo
+
+                addLog('Mensaje enviado');
+            }
+        });
+    </script>
+</body>
+</html>
