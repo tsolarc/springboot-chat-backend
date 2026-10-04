@@ -3,6 +3,7 @@ package com.Backend.User.dto;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
@@ -21,6 +22,7 @@ public class UserDTO implements Serializable {
     private String name;
     private String username;
     private String email;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
     private String phoneNumber;
     private String location;

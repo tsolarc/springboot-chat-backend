@@ -21,8 +21,8 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ChatChannelInterceptor implements ChannelInterceptor {
 
-    private static final Pattern CHAT_DESTINATION_PATTERN = Pattern.compile("/topic/chat\\.(\\d+).*");
-    private static final Pattern APP_CHAT_PATTERN = Pattern.compile("/app/chat/(\\d+)/.*");
+    private static final Pattern CHAT_DESTINATION_PATTERN = Pattern.compile("/topic/chat\\.(\\d+)(?:\\.(?:typing|read|deleted|error))?");
+    private static final Pattern APP_CHAT_PATTERN = Pattern.compile("/app/chat/(\\d+)/(?:send|read/\\d+|typing)");
 
     private final ChatServiceImpl chatService;
 
@@ -36,9 +36,7 @@ public class ChatChannelInterceptor implements ChannelInterceptor {
 
         StompCommand command = accessor.getCommand();
 
-        if (StompCommand.CONNECT.equals(command)) {
-            log.debug("WebSocket CONNECT recibido");
-        } else if (StompCommand.SUBSCRIBE.equals(command)) {
+        if (StompCommand.SUBSCRIBE.equals(command)) {
             validateChatAccess(accessor, "SUBSCRIBE");
         } else if (StompCommand.SEND.equals(command)) {
             validateSendAccess(accessor);
@@ -54,6 +52,9 @@ public class ChatChannelInterceptor implements ChannelInterceptor {
         }
 
         Matcher matcher = CHAT_DESTINATION_PATTERN.matcher(destination);
+        if (!matcher.matches()) {
+            throw new MessageDeliveryException("Destino de suscripción no permitido");
+        }
         if (matcher.matches()) {
             Long chatId = Long.parseLong(matcher.group(1));
             Principal user = accessor.getUser();
@@ -80,6 +81,9 @@ public class ChatChannelInterceptor implements ChannelInterceptor {
         }
 
         Matcher matcher = APP_CHAT_PATTERN.matcher(destination);
+        if (!matcher.matches()) {
+            throw new MessageDeliveryException("Destino de envío no permitido");
+        }
         if (matcher.matches()) {
             Long chatId = Long.parseLong(matcher.group(1));
             Principal user = accessor.getUser();

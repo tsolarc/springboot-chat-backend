@@ -57,7 +57,7 @@ class ChatChannelInterceptorTest {
     @Test
     void preSend_subscribeWithAccess_shouldAllow() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
-        accessor.setDestination("/topic/chat.100.messages");
+        accessor.setDestination("/topic/chat.100");
         accessor.setUser(principal);
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
 
@@ -72,7 +72,7 @@ class ChatChannelInterceptorTest {
     @Test
     void preSend_subscribeWithoutAccess_shouldThrow() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
-        accessor.setDestination("/topic/chat.100.messages");
+        accessor.setDestination("/topic/chat.100");
         accessor.setUser(principal);
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
 
@@ -86,7 +86,7 @@ class ChatChannelInterceptorTest {
     @Test
     void preSend_subscribeWithoutUser_shouldThrow() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
-        accessor.setDestination("/topic/chat.100.messages");
+        accessor.setDestination("/topic/chat.100");
         accessor.setUser(null);
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
 
@@ -137,15 +137,15 @@ class ChatChannelInterceptorTest {
     }
 
     @Test
-    void preSend_nonChatDestination_shouldPassThrough() {
+    void preSend_nonChatDestination_shouldBeRejected() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
         accessor.setDestination("/topic/other.destination");
         accessor.setUser(principal);
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
 
-        Message<?> result = interceptor.preSend(message, channel);
-
-        assertThat(result).isNotNull();
+        assertThatThrownBy(() -> interceptor.preSend(message, channel))
+                .isInstanceOf(MessageDeliveryException.class)
+                .hasMessageContaining("Destino de suscripción no permitido");
         verifyNoInteractions(chatService);
     }
 
