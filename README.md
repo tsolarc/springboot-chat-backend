@@ -1,192 +1,49 @@
-# Spring Boot Chat Backend
+# Microservicio de mensajería
 
-Backend API para una aplicación de chat en tiempo real construida con Spring Boot, WebSockets, Redis, RabbitMQ y PostgreSQL.
+API de mensajería para clientes móviles. PostgreSQL conserva conversaciones y mensajes; RabbitMQ distribuye eventos en tiempo real; WebSocket/STOMP los entrega a los clientes. La app móvil se conecta a la API, no a RabbitMQ.
 
-## 📋 Descripción
+## Ejecutar localmente
 
-Este proyecto implementa un sistema de chat en tiempo real utilizando tecnologías modernas de mensajería y comunicación bidireccional. El sistema permite:
-
-- **Comunicación en tiempo real** mediante WebSockets y STOMP
-- **Mensajería asíncrona** con RabbitMQ para escalabilidad
-- **Caché distribuido** con Redis para sesiones y rendimiento
-- **Persistencia de datos** con PostgreSQL (PostGIS)
-- **Autenticación y seguridad** con JWT y Spring Security
-- **Monitoreo y observabilidad** con Prometheus, Grafana y exportadores
-
-## 🏗️ Arquitectura
-
-```
-┌─────────────┐         WebSocket          ┌──────────────┐
-│   Cliente   │ ←────────────────────────→ │ Spring Boot  │
-└─────────────┘         STOMP/WS           │   Backend    │
-                                            └───────┬──────┘
-                                                    │
-                    ┌───────────────────────────────┼───────────────────┐
-                    │                               │                   │
-              ┌─────▼─────┐              ┌─────────▼────┐      ┌──────▼──────┐
-              │ RabbitMQ  │              │    Redis     │      │ PostgreSQL  │
-              │ (Mensajes)│              │   (Cache)    │      │   (Datos)   │
-              └───────────┘              └──────────────┘      └─────────────┘
-```
-
-### Componentes principales:
-
-- **WebSockets**: Comunicación bidireccional en tiempo real entre clientes y servidor
-- **RabbitMQ**: Message broker para desacoplar servicios y manejar mensajes asincrónicamente
-- **Redis**: Cache distribuido para sesiones, tokens y datos temporales
-- **PostgreSQL**: Base de datos relacional con extensión PostGIS para datos geoespaciales
-- **Spring Security + JWT**: Autenticación y autorización con tokens JSON Web
-
-## 🚀 Tecnologías
-
-- **Java 17**
-- **Spring Boot 3.4.5**
-  - Spring WebSocket & STOMP
-  - Spring Security & OAuth2
-  - Spring Data JPA
-  - Spring Data Redis
-  - Spring AMQP (RabbitMQ)
-  - Spring Actuator
-- **PostgreSQL 16** con PostGIS 3.5
-- **Redis** (cache y pub/sub)
-- **RabbitMQ 3** con STOMP
-- **Docker & Docker Compose**
-- **Prometheus + Grafana** (monitoreo)
-- **Lombok** (reducción de boilerplate)
-- **JWT** (autenticación)
-
-## 📦 Estructura del Proyecto
-
-```
-springboot-chat-backend/
-├── Backend/                    # Código fuente del backend
-│   ├── src/
-│   │   ├── main/
-│   │   │   ├── java/          # Código Java
-│   │   │   └── resources/     # Configuración
-│   │   └── test/              # Tests
-│   ├── Dockerfile
-│   └── pom.xml
-├── docker-compose.yaml         # Orquestación de servicios
-├── env.local.sample           # Plantilla de variables de entorno
-└── monitoring/                # Configuración de monitoreo
-    ├── prometheus/
-    └── grafana/
-```
-
-## 🛠️ Configuración y Ejecución
-
-### Prerrequisitos
-
-- Docker y Docker Compose
-- Java 17 (para desarrollo local)
-- Maven (para desarrollo local)
-
-### Variables de Entorno
-
-Copia el archivo `env.local.sample` a `.env` y configura las siguientes variables:
+Requiere Docker Compose. Copia `env.local.sample` a `.env`, define un `JWT_SECRET_KEY` propio y ejecuta:
 
 ```bash
-# JWT Configuration
-JWT_SECRET_KEY=<tu-token-de-seguridad-jwt>
-JWT_EXPIRATION_DATE=900000  # 15 minutos
-
-# Database Configuration (para desarrollo local)
-DB_USER=postgres
-DB_PASSWORD=1234
-DATABASE_URL=jdbc:postgresql://localhost:5432/BeatMap_BDD
+docker compose up --build -d
+docker compose ps
 ```
 
-### Ejecutar con Docker Compose
+La API escucha en `http://localhost:8001`. Flyway crea el esquema en PostgreSQL. RabbitMQ habilita STOMP; Redis se usa para limitación de conexiones y caché.
 
-```bash
-# Levantar todos los servicios
-docker-compose up -d
+## Flujo de mensajes
 
-# Ver logs
-docker-compose logs -f backend
+1. `POST /v1/conversations/{chatId}/messages` valida el JWT y la membresía. El cliente envía `clientMessageId` para que un reintento no duplique el mensaje.
+2. El mensaje y su evento de outbox se guardan en una sola transacción PostgreSQL.
+3. `db-scheduler` ejecuta `publish-message-outbox` cada segundo. La tabla `scheduled_tasks` coordina el trabajo entre instancias; el publicador confirma la entrega a RabbitMQ y reintenta los errores.
+4. El consumidor de eventos reenvía el evento al destino STOMP `/topic/chat.{chatId}`. Tras reconectar, el cliente recupera mensajes con `GET /v1/conversations/{chatId}/messages?before=...`.
 
-# Detener servicios
-docker-compose down
-```
+El historial, la lista de conversaciones y el cursor de lectura están bajo `/v1/conversations`. El WebSocket usa `/dm` y requiere JWT en `CONNECT`. Ver [propuesta técnica](docs/PROPUESTA_MICROSERVICIO_MENSAJERIA.md) para el diseño y las decisiones pendientes.
 
-### Ejecutar en modo desarrollo (local)
+## Diagnóstico de tareas
 
-```bash
-cd Backend
-./mvnw spring-boot:run
-```
+`scheduled_task_log` guarda las ejecuciones del worker con estado, instancia, inicio, fin, duración y contadores. `scheduled_task_event_log` guarda cada intento de publicación con `event_id`, usuario, conversación, mensaje, `clientMessageId`, operación, origen, número de intento y error. El origen es la ruta HTTP cuando existe; para eventos creados por STOMP se registra el servicio que ejecutó la operación. El job es disparado por horario, por eso su `trigger_type` es `SCHEDULED` y no tiene un usuario propio. No se guardan cuerpos de mensajes ni tokens en estas tablas. Los ciclos sin eventos pendientes no generan filas de auditoría para evitar crecimiento continuo.
 
-## 🔌 Servicios y Puertos
-
-| Servicio | Puerto | Descripción |
-|----------|--------|-------------|
-| Backend | 8000 | API REST |
-| Backend SSL | 8443 | API REST (HTTPS) |
-| PostgreSQL | 5432 | Base de datos |
-| Redis | 6379 | Cache |
-| RabbitMQ | 5672 | AMQP |
-| RabbitMQ Management | 15672 | UI de administración |
-| RabbitMQ STOMP | 61613 | WebSocket STOMP |
-| Prometheus | 9090 | Métricas |
-| Grafana | 3000 | Dashboards (admin/admin123) |
-| Node Exporter | 9100 | Métricas del sistema |
-| cAdvisor | 8082 | Métricas de contenedores |
-| Jenkins | 8080 | CI/CD |
-| Frontend | 80/443 | Aplicación web |
-| TileServer | 8081 | Servidor de mapas |
-
-## 🔐 Seguridad
-
-El proyecto implementa:
-
-- **Autenticación JWT**: Tokens firmados con secreto configurable
-- **Spring Security**: Filtros de seguridad y autorización
-- **OAuth2**: Soporte para login con proveedores externos
-- **CORS**: Configurado para comunicación con frontend
-- **HTTPS**: Certificados SSL con Let's Encrypt
-
-## 📊 Monitoreo
-
-El stack de monitoreo incluye:
-
-- **Prometheus**: Recolección de métricas
-- **Grafana**: Visualización de dashboards
-- **Node Exporter**: Métricas del host
-- **cAdvisor**: Métricas de contenedores Docker
-- **PostgreSQL Exporter**: Métricas de la base de datos
-- **Redis Exporter**: Métricas de Redis
-- **RabbitMQ Exporter**: Métricas de RabbitMQ
-- **Spring Actuator**: Métricas de la aplicación
-
-Accede a Grafana en `http://localhost:3000` (admin/admin123)
-
-## 🧪 Testing
+## Pruebas
 
 ```bash
 cd Backend
 ./mvnw test
 ```
 
-## 📝 API Endpoints
+La suite unitaria usa H2 y desactiva `db-scheduler`; la migración y la coordinación entre instancias requieren una prueba de integración con PostgreSQL y RabbitMQ. Las pruebas WebSocket de integración existentes están omitidas.
 
-Los principales endpoints de la API incluyen:
+## Variables principales
 
-- **WebSocket**: `ws://localhost:8000/ws` - Conexión WebSocket para chat en tiempo real
-- **REST API**: `http://localhost:8000/api/...` - Endpoints REST para operaciones CRUD
+| Variable | Uso |
+| --- | --- |
+| `JWT_SECRET_KEY` | Firma de tokens JWT |
+| `DATABASE_URL`, `DB_USER`, `DB_PASSWORD` | PostgreSQL |
+| `RABBITMQ_HOST`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | RabbitMQ |
+| `RABBITMQ_STOMP_PORT` | Relay STOMP |
+| `DB_SCHEDULER_POLLING_INTERVAL`, `DB_SCHEDULER_THREADS` | Frecuencia y concurrencia del scheduler |
+| `SERVER_PORT` | Puerto HTTP, por defecto 8001 |
 
-## 🤝 Contribuir
-
-1. Fork el proyecto
-2. Crea tu rama de feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-## 📄 Licencia
-
-Este proyecto está bajo licencia MIT.
-
-## 👥 Autores
-
-- BeatMap Team
+Los nombres de dominio y puertos se configuran por entorno. No están fijados en `AppConstants`.
