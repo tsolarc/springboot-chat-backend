@@ -1,8 +1,10 @@
 package com.Backend.Chat.controller;
 
-import com.Backend.Chat.config.ChatConstants;
 import com.Backend.Chat.dto.Message.MessageDTO;
-import com.Backend.Chat.service.interfaces.IMessageBrokerService;
+import com.Backend.Chat.dto.Message.SendMessageRequest;
+import com.Backend.Chat.exception.ChatAccessDeniedException;
+import com.Backend.Chat.service.implementation.MessageCommandService;
+import com.Backend.Chat.service.interfaces.IChatService;
 import com.Backend.Chat.service.interfaces.IMessageHistoryQueryService;
 import com.Backend.Chat.service.interfaces.IMessageRealtimeEventService;
 import com.Backend.Chat.service.interfaces.IMessageService;
@@ -28,29 +30,32 @@ import java.util.Map;
 public class MessageController {
 
     private final IMessageService messageService;
+    private final IChatService chatService;
     private final IUserService userService;
-    private final IMessageBrokerService rabbitMQMessageBrokerService;
+    private final MessageCommandService messageCommandService;
     private final IMessageHistoryQueryService messageHistoryQueryService;
     private final IMessageRealtimeEventService messageRealtimeEventService;
 
     @PostMapping
-    public ResponseEntity<Void> enqueueMessage(@Valid @RequestBody MessageDTO dto) {
-        rabbitMQMessageBrokerService.sendMessage(ChatConstants.ROUTING_KEY_MESSAGE, dto);
-        return ResponseEntity.accepted().build();
+    public ResponseEntity<MessageDTO> enqueueMessage(@Valid @RequestBody MessageDTO dto, Principal principal) {
+        if (dto.getClientMessageId() == null) {
+            throw new IllegalArgumentException("clientMessageId is required");
+        }
+        MessageCommandService.SendResult result = messageCommandService.send(dto.getChatId(),
+                new SendMessageRequest(dto.getClientMessageId(), dto.getContent()), principal.getName());
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result.message());
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Void> enqueueEdit(@PathVariable Long id, @Valid @RequestBody MessageDTO edit, Principal principal) {
+    public ResponseEntity<MessageDTO> enqueueEdit(@PathVariable Long id, @Valid @RequestBody MessageDTO edit, Principal principal) {
         UserDTO currentUser = userService.findByUsername(principal.getName());
 
         if (!messageService.isMessageOwner(id, currentUser.getId())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        edit.setId(id);
-        edit.setEditorId(currentUser.getId());
-        rabbitMQMessageBrokerService.sendMessage(ChatConstants.ROUTING_KEY_EDIT, edit);
-        return ResponseEntity.accepted().build();
+        MessageDTO updated = messageService.editMessage(id, edit, currentUser.getId());
+        return ResponseEntity.ok(updated);
     }
 
     @DeleteMapping("/{id}")
@@ -61,12 +66,14 @@ public class MessageController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        rabbitMQMessageBrokerService.sendMessage(ChatConstants.ROUTING_KEY_DELETE, id);
+        Long chatId = messageService.getMessageById(id).getChatId();
+        messageService.deleteMessage(id, currentUser.getId());
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{chatId}/messages")
-    public Page<MessageDTO> getMessageHistory(@PathVariable Long chatId, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(defaultValue = "sendedAt") String sortBy, @RequestParam(defaultValue = "desc") String direction) {
+    public Page<MessageDTO> getMessageHistory(@PathVariable Long chatId, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(defaultValue = "sendedAt") String sortBy, @RequestParam(defaultValue = "desc") String direction, Principal principal) {
+        requireChatMember(chatId, principal);
         PageRequest pageRequest = messageHistoryQueryService.initialize(page, size, sortBy, direction);
         return messageService.getMessagesByChatIdPaginated(chatId, pageRequest);
     }
@@ -83,10 +90,17 @@ public class MessageController {
 
     @GetMapping("/unread/{chatId}")
     public ResponseEntity<List<MessageDTO>> getUnreadMessages(Principal principal, @PathVariable Long chatId) {
+        requireChatMember(chatId, principal);
         UserDTO currentUserDto = userService.findByUsername(principal.getName());
 
         return ResponseEntity.ok(
                 messageService.getUnreadMessages(currentUserDto.getId(), chatId)
         );
+    }
+
+    private void requireChatMember(Long chatId, Principal principal) {
+        if (!chatService.userHasAccessToChat(principal.getName(), chatId)) {
+            throw new ChatAccessDeniedException("No tienes acceso a este chat");
+        }
     }
 }

@@ -11,6 +11,7 @@ import com.Backend.Chat.repository.ChatRepository;
 import com.Backend.Chat.repository.MessageHistoryRepository;
 import com.Backend.Chat.repository.MessageRepository;
 import com.Backend.Chat.service.implementation.MessageServiceImpl;
+import com.Backend.Chat.service.implementation.MessageOutboxWriter;
 import com.Backend.User.entity.User;
 import com.Backend.User.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -47,6 +48,9 @@ class MessageServiceImplTest {
 
     @Mock
     UserRepository userRepository;
+
+    @Mock
+    MessageOutboxWriter outboxWriter;
 
     @InjectMocks
     MessageServiceImpl messageService;
@@ -182,7 +186,8 @@ class MessageServiceImplTest {
 
         messageService.deleteMessage(1L, 5L);
 
-        verify(messageRepository).deleteById(1L);
+        verify(messageRepository).save(message);
+        verify(outboxWriter).messageDeleted(message);
     }
 
     @Test

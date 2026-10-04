@@ -18,13 +18,17 @@ import java.util.*;
         @Index(name = "idx_message_chat_id", columnList = "chat_id"),
         @Index(name = "idx_message_chat_sended_at", columnList = "chat_id, sended_at"),
         @Index(name = "idx_message_sender_id", columnList = "sender_id")
-})
+}, uniqueConstraints = @UniqueConstraint(name = "uq_message_sender_client_id", columnNames = {"sender_id", "client_message_id"}))
 public class Message {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Column(name = "message_content", columnDefinition = "text")
     private String messageContent;
+
+    @Column(name = "client_message_id")
+    private UUID clientMessageId;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "chat_id")
@@ -39,6 +43,10 @@ public class Message {
 
     @Temporal(TemporalType.TIMESTAMP)
     private Date sendedAt;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "deleted_at")
+    private Date deletedAt;
 
     @ElementCollection
     @CollectionTable(name = "message_read_status", joinColumns = @JoinColumn(name = "message_id"))

@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.TopicExchange;
 @Configuration
 public class RabbitMQConfig {
 
@@ -29,6 +30,29 @@ public class RabbitMQConfig {
     @Bean
     public DirectExchange chatExchange() {
         return new DirectExchange("chat.exchange", true, false);
+    }
+
+    @Bean
+    public TopicExchange messagingEventsExchange() {
+        return new TopicExchange("messaging.events", true, false);
+    }
+
+    @Bean
+    public Queue realtimeEventsQueue() {
+        return QueueBuilder.durable("chat.realtime.queue")
+                .withArgument("x-dead-letter-exchange", "chat.dlx")
+                .withArgument("x-dead-letter-routing-key", "chat.dead")
+                .build();
+    }
+
+    @Bean
+    public Binding realtimeEventsBinding() {
+        return BindingBuilder.bind(realtimeEventsQueue()).to(messagingEventsExchange()).with("message.*");
+    }
+
+    @Bean
+    public Binding realtimeReadBinding() {
+        return BindingBuilder.bind(realtimeEventsQueue()).to(messagingEventsExchange()).with("conversation.read");
     }
 
     @Bean
@@ -59,6 +83,7 @@ public class RabbitMQConfig {
     public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(new Jackson2JsonMessageConverter());
+        template.setMandatory(true);
         template.setConfirmCallback((correlationData, ack, cause) -> {
             if (ack == false) {
                 log.error("Message was not confirmed: {}", cause);

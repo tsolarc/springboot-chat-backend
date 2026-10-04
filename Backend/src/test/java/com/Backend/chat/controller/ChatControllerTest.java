@@ -92,7 +92,8 @@ class ChatControllerTest {
 
         when(messageService.getMessagesByChatId(100L)).thenReturn(messages);
 
-        List<MessageDTO> result = chatController.getMessageHistory(100L);
+        when(chatService.userHasAccessToChat("testuser", 100L)).thenReturn(true);
+        List<MessageDTO> result = chatController.getMessageHistory(100L, principal);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getContent()).isEqualTo("Test message");

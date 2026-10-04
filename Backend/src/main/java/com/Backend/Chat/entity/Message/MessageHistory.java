@@ -25,6 +25,7 @@ public class MessageHistory {
     @JoinColumn(name= "message_id")
     private Message message;
 
+    @Column(name = "previous_content", columnDefinition = "text")
     private String previousContent;
 
     @Enumerated(EnumType.STRING)

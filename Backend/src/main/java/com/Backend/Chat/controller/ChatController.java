@@ -2,6 +2,7 @@ package com.Backend.Chat.controller;
 
 import com.Backend.Chat.dto.Chat.ChatDTO;
 import com.Backend.Chat.dto.Message.MessageDTO;
+import com.Backend.Chat.exception.ChatAccessDeniedException;
 import com.Backend.Chat.service.implementation.MessageServiceImpl;
 import com.Backend.Chat.service.interfaces.IChatService;
 import com.Backend.User.dto.UserDTO;
@@ -33,7 +34,10 @@ public class ChatController {
     }
 
     @GetMapping("/{chatId}/messages")
-    public List<MessageDTO> getMessageHistory(@PathVariable Long chatId) {
+    public List<MessageDTO> getMessageHistory(@PathVariable Long chatId, Principal principal) {
+        if (!chatService.userHasAccessToChat(principal.getName(), chatId)) {
+            throw new ChatAccessDeniedException("No tienes acceso a este chat");
+        }
         return messageService.getMessagesByChatId(chatId);
     }
 
