@@ -6,7 +6,7 @@ Convertir este repositorio en el servicio responsable de conversaciones, miembro
 
 El primer alcance es mensajería directa de texto. Grupos, adjuntos, búsqueda, presencia y cifrado de extremo a extremo quedan como decisiones posteriores, porque cambian el modelo y el contrato público.
 
-## Estado actual que bloquea ese objetivo
+## Diagnóstico inicial (histórico, anterior a los PRs #1–#5)
 
 | Prioridad | Hallazgo en el código | Consecuencia |
 | --- | --- | --- |
@@ -122,7 +122,7 @@ La app genera `clientMessageId` antes de enviar. Si pierde la respuesta, puede r
 
 **Criterio de cierre:** un usuario puede enviar, cerrar la app, volver y recuperar exactamente una vez cada mensaje visible; ambas instancias entregan eventos a sus clientes conectados.
 
-## Decisiones pendientes antes de implementar
+## Decisiones de producto pendientes
 
 1. ¿Qué servicio emite los tokens y cuál es el identificador estable del usuario (`sub`)?
 2. ¿Se necesita solo DM de texto en el primer lanzamiento, o también grupos y adjuntos?
@@ -131,6 +131,8 @@ La app genera `clientMessageId` antes de enviar. Si pierde la respuesta, puede r
 
 ## Avance de implementación
 
-Ya se incorporaron autenticación para REST y STOMP, verificación de membresía, envío idempotente con `clientMessageId`, historial por cursor, cursor de lectura, migraciones Flyway y outbox transaccional. El publicador del outbox usa `db-scheduler` con la tabla `scheduled_tasks` para coordinar varias instancias y reintenta publicaciones fallidas. La auditoría en `scheduled_task_log` y `scheduled_task_event_log` permite seguir cada ejecución y cada intento de publicación hasta su usuario y mensaje de origen. La suite actual ejecuta 96 pruebas: 94 pasan y 2 pruebas WebSocket de integración están omitidas.
+Los PRs #1–#5 incorporaron autenticación REST y STOMP, membresía, envío idempotente, historial por cursor, cursor de lectura, migraciones Flyway, outbox transaccional, coordinación con db-scheduler, auditoría y despliegue con Compose.
 
-Quedan por validar en un entorno integrado las migraciones sobre PostgreSQL, el relay STOMP y la recuperación con varias instancias. La entrega de notificaciones push requiere elegir proveedor y credenciales.
+La mejora de producción agrega reservas recuperables con SKIP LOCKED, varios workers, límite de intentos, auditoría por transición, correlación por requestId, salud pública y métricas con credenciales independientes. La suite `-Pintegration verify` utiliza PostgreSQL, RabbitMQ/STOMP y Redis reales, y comprueba dos instancias de la API. El [contrato vigente](API.md) y la [guía de operación](OPERACION.md) describen el comportamiento implementado; las rutas de la propuesta anterior no equivalen todas a endpoints disponibles.
+
+Siguen pendientes la integración con un proveedor de identidad externo, el proveedor y las credenciales de notificaciones push, las políticas de retención y el procedimiento automatizado de reproceso. Grupos, adjuntos, búsqueda y cifrado de extremo a extremo están fuera del primer alcance.

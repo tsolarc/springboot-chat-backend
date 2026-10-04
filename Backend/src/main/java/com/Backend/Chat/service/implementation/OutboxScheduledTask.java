@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -13,28 +12,27 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 @Slf4j
 public class OutboxScheduledTask {
-
     private final MessageOutboxPublisher publisher;
     private final ScheduledTaskAuditService auditService;
 
     public void run() {
         UUID runId = UUID.randomUUID();
         Instant startedAt = Instant.now();
-        long startedNanos = System.nanoTime();
+        long clock = System.nanoTime();
+        Exception failure = null;
         try {
-            MessageOutboxPublisher.PublishResult result = publisher.publishReady();
-            auditService.record(runId, startedAt, Instant.now(), elapsed(startedNanos), result.attempts(), null);
-        } catch (Exception failure) {
+            publisher.publishReady(runId, startedAt);
+        } catch (Exception exception) {
+            failure = exception;
+            throw exception;
+        } finally {
             try {
-                auditService.record(runId, startedAt, Instant.now(), elapsed(startedNanos), List.of(), failure);
+                auditService.finish(runId, startedAt, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - clock), failure);
             } catch (Exception auditFailure) {
-                log.error("Could not audit failed outbox run {}", runId, auditFailure);
+                log.error("Could not finish audit runId={}", runId, auditFailure);
+                if (failure == null) throw auditFailure;
+                failure.addSuppressed(auditFailure);
             }
-            throw failure;
         }
-    }
-
-    private long elapsed(long startedNanos) {
-        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
     }
 }

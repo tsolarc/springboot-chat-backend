@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import com.Backend.Common.Http.RequestIdFilter;
+import org.slf4j.MDC;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -83,6 +85,7 @@ public class MessageOutboxWriter {
         event.setOriginMessageId(messageId);
         event.setOriginClientMessageId(clientMessageId);
         event.setOriginOperation(operation);
+        event.setOriginRequestId(MDC.get(RequestIdFilter.ATTRIBUTE));
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
             String route = attributes.getRequest().getMethod() + " " + attributes.getRequest().getRequestURI();
             event.setOriginSource(route.substring(0, Math.min(route.length(), 100)));
