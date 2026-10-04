@@ -1,70 +1,48 @@
 package com.Backend.chat.service;
 
 import com.Backend.Chat.entity.Message.MessageOutboxEvent;
-import com.Backend.Chat.repository.MessageOutboxRepository;
+import com.Backend.Chat.outbox.*;
 import com.Backend.Chat.service.implementation.MessageOutboxPublisher;
+import com.Backend.Chat.service.implementation.ScheduledTaskAuditService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.amqp.AmqpException;
-import org.springframework.amqp.rabbit.connection.CorrelationData;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 class MessageOutboxPublisherTest {
-
-    @Mock MessageOutboxRepository repository;
-    @Mock RabbitTemplate rabbitTemplate;
-    @InjectMocks MessageOutboxPublisher publisher;
-
-    private MessageOutboxEvent event() {
-        MessageOutboxEvent event = new MessageOutboxEvent();
+    @Test
+    void failedTransportIsSettledForRetryAndRecordedInMetrics() throws Exception {
+        var store = mock(OutboxStore.class);
+        var transport = mock(EventPublisher.class);
+        var audit = mock(ScheduledTaskAuditService.class);
+        var metrics = new SimpleMeterRegistry();
+        var event = new MessageOutboxEvent();
         event.setId(UUID.randomUUID());
-        event.setRoutingKey("message.created");
-        event.setPayload("{}");
-        event.setCreatedAt(Instant.now());
-        event.setNextAttemptAt(Instant.now());
-        return event;
+        event.setAttempts(1);
+        when(store.claimNext()).thenReturn(Optional.of(event), Optional.empty());
+        var failure = new IllegalStateException("broker unavailable");
+        doThrow(failure).when(transport).publish(event);
+        var publisher = new MessageOutboxPublisher(store, transport, new OutboxProperties(), audit, metrics);
+        UUID run = UUID.randomUUID();
+        publisher.publishReady(run, Instant.now());
+        verify(store).settle(eq(run), same(event), same(failure), anyLong());
+        assertThat(metrics.counter("messaging.outbox.publications", "outcome", "failure").count()).isEqualTo(1);
     }
 
     @Test
-    void confirmedPublishMarksEventComplete() {
-        MessageOutboxEvent event = event();
-        when(repository.findReadyForUpdate(any(Instant.class), any(Pageable.class))).thenReturn(List.of(event));
-        doAnswer(invocation -> {
-            CorrelationData correlation = invocation.getArgument(3);
-            correlation.getFuture().complete(new CorrelationData.Confirm(true, null));
-            return null;
-        }).when(rabbitTemplate).send(eq("messaging.events"), eq("message.created"), any(), any(CorrelationData.class));
-
-        publisher.publishReady();
-
-        assertThat(event.getPublishedAt()).isNotNull();
-        assertThat(event.getAttempts()).isZero();
-    }
-
-    @Test
-    void failedPublishSchedulesRetry() {
-        MessageOutboxEvent event = event();
-        when(repository.findReadyForUpdate(any(Instant.class), any(Pageable.class))).thenReturn(List.of(event));
-        doThrow(new AmqpException("broker unavailable"))
-                .when(rabbitTemplate).send(anyString(), anyString(), any(), any(CorrelationData.class));
-
-        publisher.publishReady();
-
-        assertThat(event.getPublishedAt()).isNull();
-        assertThat(event.getAttempts()).isEqualTo(1);
-        assertThat(event.getNextAttemptAt()).isAfter(event.getCreatedAt());
+    void noPendingMessagesDoesNotCreateAuditRows() {
+        var store = mock(OutboxStore.class);
+        var audit = mock(ScheduledTaskAuditService.class);
+        var transport = mock(EventPublisher.class);
+        when(store.claimNext()).thenReturn(Optional.empty());
+        new MessageOutboxPublisher(store, transport, new OutboxProperties(), audit, new SimpleMeterRegistry())
+                .publishReady(UUID.randomUUID(), Instant.now());
+        verifyNoInteractions(audit, transport);
     }
 }

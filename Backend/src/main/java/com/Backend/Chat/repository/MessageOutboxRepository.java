@@ -1,20 +1,26 @@
 package com.Backend.Chat.repository;
 
 import com.Backend.Chat.entity.Message.MessageOutboxEvent;
-import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import jakarta.persistence.LockModeType;
 import java.time.Instant;
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface MessageOutboxRepository extends JpaRepository<MessageOutboxEvent, UUID> {
+    @Query(value = """
+            SELECT * FROM message_outbox
+            WHERE published_at IS NULL AND dead_lettered_at IS NULL AND next_attempt_at <= :now
+              AND (claimed_until IS NULL OR claimed_until <= :now)
+            ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<MessageOutboxEvent> claimCandidate(@Param("now") Instant now);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select e from MessageOutboxEvent e where e.publishedAt is null and e.nextAttemptAt <= :now order by e.createdAt, e.id")
-    List<MessageOutboxEvent> findReadyForUpdate(@Param("now") Instant now, Pageable pageable);
+    @Query("select e from MessageOutboxEvent e where e.id = :id and e.claimToken = :token")
+    Optional<MessageOutboxEvent> findOwned(@Param("id") UUID id, @Param("token") UUID token);
 }

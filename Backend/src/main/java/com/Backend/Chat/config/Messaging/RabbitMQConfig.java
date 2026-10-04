@@ -17,6 +17,11 @@ import org.springframework.amqp.core.TopicExchange;
 @Configuration
 public class RabbitMQConfig {
 
+    @Bean
+    public org.springframework.amqp.rabbit.retry.MessageRecoverer failedMessageRecoverer() {
+        return new org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer();
+    }
+
     private static final Logger log = LoggerFactory.getLogger(RabbitMQConfig.class);
 
     @Bean

@@ -54,4 +54,16 @@ public class MessageOutboxEvent {
 
     @Column(name = "origin_source", length = 100)
     private String originSource;
+
+    @Column(name = "claim_token")
+    private UUID claimToken;
+
+    @Column(name = "claimed_until")
+    private Instant claimedUntil;
+
+    @Column(name = "dead_lettered_at")
+    private Instant deadLetteredAt;
+
+    @Column(name = "origin_request_id", length = 64)
+    private String originRequestId;
 }
