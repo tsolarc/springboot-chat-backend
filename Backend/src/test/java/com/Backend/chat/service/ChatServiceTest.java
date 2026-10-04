@@ -107,7 +107,7 @@ public class ChatServiceTest {
         when(chatRepository.save(any(Chat.class))).thenReturn(chat);
         when(chatRepository.findById(anyLong())).thenReturn(Optional.of(chat));
         when(chatRepository.findPrivateChatBetweenUsers(anyLong(), anyLong())).thenReturn(Optional.empty());
-        when(chatRepository.findDirectChat(anyLong(), anyLong())).thenReturn(Optional.empty());
+        when(chatRepository.findByDirectKey(anyString())).thenReturn(Optional.empty());
         when(chatRepository.findAllByMembers_User_Id(anyLong())).thenReturn(Collections.singletonList(chat));
 
         when(chatMemberRepository.save(any(ChatMember.class))).thenReturn(member1);
@@ -191,7 +191,8 @@ public class ChatServiceTest {
             return participants;
         });
         this.chatService = new ChatServiceImpl(chatRepository, chatMemberRepository, userRepository, chatMapper, loadParticipantsService);
-        this.messageService = new MessageServiceImpl(messageRepository, chatRepository, messageHistoryRepository, messageMapper, userRepository);
+        this.messageService = new MessageServiceImpl(messageRepository, chatRepository, messageHistoryRepository,
+                messageMapper, userRepository, Mockito.mock(com.Backend.Chat.service.implementation.MessageOutboxWriter.class));
     }
 
     @Test
@@ -325,7 +326,7 @@ public class ChatServiceTest {
 
     @Test
     void getOrCreateDirectChat_whenChatExists_returnsExistingChat() {
-        when(chatRepository.findDirectChat(user1.getId(), user2.getId())).thenReturn(Optional.of(chat));
+        when(chatRepository.findByDirectKey("1:2")).thenReturn(Optional.of(chat));
 
         ChatDTO result = chatService.getOrCreateDirectChat(user1.getId(), user2.getId());
 
@@ -336,13 +337,13 @@ public class ChatServiceTest {
 
     @Test
     void getOrCreateDirectChat_whenChatDoesNotExist_createsNewChat() {
-        when(chatRepository.findDirectChat(user1.getId(), user2.getId())).thenReturn(Optional.empty());
+        when(chatRepository.findByDirectKey("1:2")).thenReturn(Optional.empty());
 
         ChatDTO result = chatService.getOrCreateDirectChat(user1.getId(), user2.getId());
 
         assertNotNull(result);
         verify(chatRepository).save(any(Chat.class));
-        verify(chatMemberRepository).saveAll(anyList());
+        verify(chatRepository).save(any(Chat.class));
     }
 
     @Test

@@ -40,6 +40,7 @@ public class MessageServiceImpl implements IMessageService {
     private final MessageHistoryRepository messageHistoryRepository;
     private final MessageMapper messageMapper;
     private final UserRepository userRepository;
+    private final MessageOutboxWriter outboxWriter;
 
     @Override
     @Transactional
@@ -96,6 +97,10 @@ public class MessageServiceImpl implements IMessageService {
         Message existing = messageRepository.findById(messageId)
                 .orElseThrow(() -> new MessageNotFoundException(messageId));
 
+        if (existing.getDeletedAt() != null) {
+            throw new IllegalArgumentException("Deleted messages cannot be edited");
+        }
+
         if (!isMessageOwner(messageId, requestingUserId)) {
             throw new MessageOwnershipException(requestingUserId, messageId);
         }
@@ -114,6 +119,7 @@ public class MessageServiceImpl implements IMessageService {
         existing.setType(dto.getType());
 
         Message updated = messageRepository.save(existing);
+        outboxWriter.messageUpdated(updated);
         log.info("Mensaje {} editado por usuario {}", messageId, requestingUserId);
         return messageMapper.convertToDTO(updated);
     }
@@ -129,7 +135,12 @@ public class MessageServiceImpl implements IMessageService {
             throw new MessageOwnershipException(requestingUserId, messageId);
         }
 
-        messageRepository.deleteById(messageId);
+        if (message.getDeletedAt() == null) {
+            message.setDeletedAt(new Date());
+            message.setMessageContent(null);
+            messageRepository.save(message);
+            outboxWriter.messageDeleted(message);
+        }
         log.info("Mensaje {} eliminado por usuario {}", messageId, requestingUserId);
     }
 

@@ -51,7 +51,6 @@ public final class TestDataHelper {
                 .phoneNumber(phoneVal)
                 .location(locVal)
                 .biography(bioVal)
-                .profilePhotoUrl(photoVal)
                 .socialNetworks(socialsVal)
                 .musicGenres(genresVal)
                 .createdAt(createdVal)

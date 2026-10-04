@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageRequest;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -48,15 +49,9 @@ public class ChatServiceImpl implements IChatService {
         if (user1Id.equals(user2Id)) {
             throw new IllegalArgumentException("No se puede crear un chat con uno mismo");
         }
-        Chat existingChat = chatRepository.findPrivateChatBetweenUsers(user1Id, user2Id).orElse(null);
-
         validateUserExists(user1Id);
         validateUserExists(user2Id);
-
-        if (existingChat != null) {
-            return chatMapper.convertToDTO(existingChat);
-        }
-        return createNewDirectChat(user1Id, user2Id);
+        return getOrCreateDirectChat(user1Id, user2Id);
     }
 
     @Override
@@ -68,7 +63,12 @@ public class ChatServiceImpl implements IChatService {
         validateUserExists(transmitterId);
         validateUserExists(receiverId);
 
-        Optional<Chat> existingChat = chatRepository.findDirectChat(transmitterId, receiverId);
+        String directKey = Math.min(transmitterId, receiverId) + ":" + Math.max(transmitterId, receiverId);
+        Optional<Chat> existingChat = chatRepository.findByDirectKey(directKey);
+        if (existingChat.isEmpty()) {
+            existingChat = chatRepository.findDirectChats(transmitterId, receiverId, PageRequest.of(0, 1))
+                    .stream().findFirst();
+        }
         if (existingChat.isPresent()) {
             return chatMapper.convertToDTO(existingChat.get());
         }
@@ -133,6 +133,7 @@ public class ChatServiceImpl implements IChatService {
         Chat chat = Chat.builder()
                 .chatType(ChatType.PRIVATE)
                 .chatName("DM: " + transmitter.getUsername() + " & " + receiver.getUsername())
+                .directKey(Math.min(transmitterId, receiverId) + ":" + Math.max(transmitterId, receiverId))
                 .isPrivate(true)
                 .members(new ArrayList<>())
                 .build();
@@ -163,6 +164,7 @@ public class ChatServiceImpl implements IChatService {
         member2.setUser(receiver);
         member2.setJoinedAt(now);
 
-        chatMemberRepository.saveAll(List.of(member1, member2));
+        chat.getMembers().add(member1);
+        chat.getMembers().add(member2);
     }
 }

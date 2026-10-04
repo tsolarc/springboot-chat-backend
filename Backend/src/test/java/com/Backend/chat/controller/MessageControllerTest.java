@@ -1,6 +1,8 @@
 package com.Backend.chat.controller;
 
 import com.Backend.Chat.config.ChatConstants;
+import com.Backend.Chat.service.implementation.MessageCommandService;
+import com.Backend.Chat.service.interfaces.IChatService;
 import com.Backend.Chat.controller.MessageController;
 import com.Backend.Chat.dto.Message.MessageDTO;
 import com.Backend.Chat.Enums.MessageType;
@@ -23,9 +25,11 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -44,7 +48,13 @@ class MessageControllerTest {
     private IUserService userService;
 
     @Mock
-    private IMessageBrokerService rabbitMQMessageBrokerService;
+    private MessageCommandService messageCommandService;
+
+    @Mock
+    private SimpMessagingTemplate messagingTemplate;
+
+    @Mock
+    private IChatService chatService;
 
     @Mock
     private IMessageHistoryQueryService messageHistoryQueryService;
@@ -68,6 +78,7 @@ class MessageControllerTest {
                 .chatId(100L)
                 .content("Test message")
                 .type(MessageType.TEXT)
+                .clientMessageId(UUID.randomUUID())
                 .build();
 
         userDTO = new UserDTO();
@@ -76,14 +87,17 @@ class MessageControllerTest {
 
         when(principal.getName()).thenReturn("testuser");
         when(userService.findByUsername("testuser")).thenReturn(userDTO);
+        when(chatService.userHasAccessToChat("testuser", 100L)).thenReturn(true);
     }
 
     @Test
-    void enqueueMessage_shouldSendToRabbitMQ() {
-        ResponseEntity<Void> response = messageController.enqueueMessage(messageDTO);
+    void enqueueMessage_shouldPersistAndPublish() {
+        when(messageCommandService.send(eq(100L), any(), eq("testuser")))
+                .thenReturn(new MessageCommandService.SendResult(messageDTO, true));
+        ResponseEntity<MessageDTO> response = messageController.enqueueMessage(messageDTO, principal);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-        verify(rabbitMQMessageBrokerService).sendMessage(ChatConstants.ROUTING_KEY_MESSAGE, messageDTO);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        verify(messageCommandService).send(eq(100L), any(), eq("testuser"));
     }
 
     @Test
@@ -95,12 +109,11 @@ class MessageControllerTest {
                 .type(MessageType.TEXT)
                 .build();
 
-        ResponseEntity<Void> response = messageController.enqueueEdit(1L, editDTO, principal);
+        when(messageService.editMessage(1L, editDTO, 5L)).thenReturn(messageDTO);
+        ResponseEntity<MessageDTO> response = messageController.enqueueEdit(1L, editDTO, principal);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-        assertThat(editDTO.getId()).isEqualTo(1L);
-        assertThat(editDTO.getEditorId()).isEqualTo(5L);
-        verify(rabbitMQMessageBrokerService).sendMessage(ChatConstants.ROUTING_KEY_EDIT, editDTO);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(messageService).editMessage(1L, editDTO, 5L);
     }
 
     @Test
@@ -112,20 +125,21 @@ class MessageControllerTest {
                 .type(MessageType.TEXT)
                 .build();
 
-        ResponseEntity<Void> response = messageController.enqueueEdit(1L, editDTO, principal);
+        ResponseEntity<MessageDTO> response = messageController.enqueueEdit(1L, editDTO, principal);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        verify(rabbitMQMessageBrokerService, never()).sendMessage(any(), any());
+        verify(messageService, never()).editMessage(any(), any(), any());
     }
 
     @Test
     void enqueueDelete_whenOwner_shouldSendDeleteMessage() {
         when(messageService.isMessageOwner(1L, 5L)).thenReturn(true);
+        when(messageService.getMessageById(1L)).thenReturn(messageDTO);
 
         ResponseEntity<Void> response = messageController.enqueueDelete(1L, principal);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-        verify(rabbitMQMessageBrokerService).sendMessage(ChatConstants.ROUTING_KEY_DELETE, 1L);
+        verify(messageService).deleteMessage(1L, 5L);
     }
 
     @Test
@@ -135,7 +149,7 @@ class MessageControllerTest {
         ResponseEntity<Void> response = messageController.enqueueDelete(1L, principal);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        verify(rabbitMQMessageBrokerService, never()).sendMessage(any(), any());
+        verify(messageService, never()).deleteMessage(any(), any());
     }
 
     @Test
@@ -147,7 +161,7 @@ class MessageControllerTest {
         when(messageService.getMessagesByChatIdPaginated(100L, pageRequest))
                 .thenReturn(messagePage);
 
-        Page<MessageDTO> result = messageController.getMessageHistory(100L, 0, 20, "sendedAt", "desc");
+        Page<MessageDTO> result = messageController.getMessageHistory(100L, 0, 20, "sendedAt", "desc", principal);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0)).isEqualTo(messageDTO);
@@ -159,7 +173,7 @@ class MessageControllerTest {
                 .thenThrow(new IllegalArgumentException("Invalid sort field: invalidField"));
 
         assertThatThrownBy(() ->
-                messageController.getMessageHistory(100L, 0, 20, "invalidField", "desc")
+                messageController.getMessageHistory(100L, 0, 20, "invalidField", "desc", principal)
         ).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid sort field");
     }
@@ -170,7 +184,7 @@ class MessageControllerTest {
                 .thenThrow(new IllegalArgumentException("Invalid sort direction: upward"));
 
         assertThatThrownBy(() ->
-                messageController.getMessageHistory(100L, 0, 20, "id", "upward")
+                messageController.getMessageHistory(100L, 0, 20, "id", "upward", principal)
         ).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid sort direction");
     }
@@ -181,7 +195,7 @@ class MessageControllerTest {
                 .thenThrow(new IllegalArgumentException("Page must be greater than or equal to 0"));
 
         assertThatThrownBy(() ->
-                messageController.getMessageHistory(100L, -1, 20, "id", "desc")
+                messageController.getMessageHistory(100L, -1, 20, "id", "desc", principal)
         ).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Page must be greater than or equal to 0");
     }
@@ -192,7 +206,7 @@ class MessageControllerTest {
                 .thenThrow(new IllegalArgumentException("Size must be between 1 and 100"));
 
         assertThatThrownBy(() ->
-                messageController.getMessageHistory(100L, 0, 0, "id", "desc")
+                messageController.getMessageHistory(100L, 0, 0, "id", "desc", principal)
         ).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Size must be between 1 and 100");
     }
@@ -206,7 +220,7 @@ class MessageControllerTest {
         when(messageService.getMessagesByChatIdPaginated(100L, pageRequest))
                 .thenReturn(messagePage);
 
-        Page<MessageDTO> result = messageController.getMessageHistory(100L, 0, 20, "id", "asc");
+        Page<MessageDTO> result = messageController.getMessageHistory(100L, 0, 20, "id", "asc", principal);
 
         assertThat(result).isNotNull();
         verify(messageService).getMessagesByChatIdPaginated(eq(100L), any(PageRequest.class));

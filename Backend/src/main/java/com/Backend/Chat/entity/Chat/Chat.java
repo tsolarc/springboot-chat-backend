@@ -30,6 +30,13 @@ public class Chat {
     @Temporal(TemporalType.TIMESTAMP)
     private Date createdAt;
 
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "last_activity_at")
+    private Date lastActivityAt;
+
+    @Column(name = "direct_key", unique = true, length = 80)
+    private String directKey;
+
     @OneToMany(mappedBy = "chat", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Message> messages = new ArrayList<>();
@@ -45,6 +52,9 @@ public class Chat {
     @PrePersist
     protected void onCreate() {
         this.createdAt = new Date();
+        if (this.lastActivityAt == null) {
+            this.lastActivityAt = this.createdAt;
+        }
     }
 
     public boolean hasUser(Long userId) {

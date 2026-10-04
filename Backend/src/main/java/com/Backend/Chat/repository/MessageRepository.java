@@ -5,11 +5,26 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.Date;
 
 public interface MessageRepository extends JpaRepository<Message, Long> {
+
+    Optional<Message> findBySender_IdAndClientMessageId(Long senderId, UUID clientMessageId);
+
+    @EntityGraph(attributePaths = "sender")
+    List<Message> findByChat_IdOrderBySendedAtDescIdDesc(Long chatId, Pageable pageable);
+
+    @Query("select m from Message m join fetch m.sender where m.chat.id = :chatId and " +
+            "(m.sendedAt < :beforeAt or (m.sendedAt = :beforeAt and m.id < :beforeId)) " +
+            "order by m.sendedAt desc, m.id desc")
+    List<Message> findBefore(@Param("chatId") Long chatId, @Param("beforeAt") Date beforeAt,
+                             @Param("beforeId") Long beforeId, Pageable pageable);
 
     @Query("SELECT m FROM Message m JOIN FETCH m.sender WHERE m.chat.id = :chatId ORDER BY m.sendedAt ASC")
     List<Message> findByChat_IdOrderBySendedAtAsc(@Param("chatId") Long chatId);

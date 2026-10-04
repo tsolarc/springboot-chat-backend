@@ -38,6 +38,9 @@ public class ChatMapper {
         } else {
             chatDTO.setMemberIds(new ArrayList<>());
         }
+        // Public API responses carry IDs only; JPA members and messages contain private data.
+        chatDTO.setMembers(null);
+        chatDTO.setMessages(null);
         return chatDTO;
     }
 
