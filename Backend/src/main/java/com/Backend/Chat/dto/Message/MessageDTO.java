@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 import java.io.Serializable;
 import java.util.Date;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -31,5 +32,9 @@ public class MessageDTO implements Serializable {
 
     private Date sendedAt;
 
+    private Date deletedAt;
+
     private Long editorId;
+
+    private UUID clientMessageId;
 }

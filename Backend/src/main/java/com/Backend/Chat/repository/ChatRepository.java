@@ -4,21 +4,37 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import com.Backend.Chat.entity.Chat.Chat;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Date;
 
 public interface ChatRepository extends JpaRepository<Chat, Long> {
 
+    Optional<Chat> findByDirectKey(String directKey);
+
+    @Modifying
+    @Query("update Chat c set c.lastActivityAt = case when c.lastActivityAt < :at then :at else c.lastActivityAt end where c.id = :chatId")
+    void advanceLastActivity(@Param("chatId") Long chatId, @Param("at") Date at);
+
+    @Query("select c from Chat c join c.members member where member.user.id = :userId and " +
+            "(:beforeAt is null or c.lastActivityAt < :beforeAt or (c.lastActivityAt = :beforeAt and c.id < :beforeId)) " +
+            "order by c.lastActivityAt desc, c.id desc")
+    List<Chat> findConversationPage(@Param("userId") Long userId, @Param("beforeAt") Date beforeAt,
+                                    @Param("beforeId") Long beforeId, Pageable pageable);
+
     @Query("""
-      SELECT chat
+      SELECT DISTINCT chat
       FROM Chat AS chat
       JOIN chat.members user1
       JOIN chat.members user2
-      WHERE user1.id = :user1Id AND user2.id = :user2Id
-      AND chat.chatType = com.Backend.Chat.Enums.ChatType.PRIVATE """)
-    Optional<Chat> findDirectChat(@Param("user1Id") Long user1Id, @Param("user2Id") Long user2Id);
+      WHERE user1.user.id = :user1Id AND user2.user.id = :user2Id
+      AND chat.chatType = com.Backend.Chat.Enums.ChatType.PRIVATE
+      ORDER BY chat.id """)
+    List<Chat> findDirectChats(@Param("user1Id") Long user1Id, @Param("user2Id") Long user2Id, Pageable pageable);
 
     @EntityGraph(attributePaths = {"members", "members.user"})
     List<Chat> findAllByMembers_User_Id(Long userId);

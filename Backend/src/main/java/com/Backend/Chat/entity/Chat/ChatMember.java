@@ -12,7 +12,7 @@ import java.util.Date;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "chat_member", indexes = {
+@Table(name = "chat_member", uniqueConstraints = @UniqueConstraint(name = "uq_chat_member_user", columnNames = {"chat_id", "user_id"}), indexes = {
         @Index(name = "idx_chat_member_chat_id", columnList = "chat_id"),
         @Index(name = "idx_chat_member_user_id", columnList = "user_id"),
         @Index(name = "idx_chat_member_composite", columnList = "chat_id, user_id")
@@ -33,4 +33,7 @@ public class ChatMember {
 
     @Column(name = "joined_at")
     private Date joinedAt;
+
+    @Column(name = "last_read_message_id")
+    private Long lastReadMessageId;
 }

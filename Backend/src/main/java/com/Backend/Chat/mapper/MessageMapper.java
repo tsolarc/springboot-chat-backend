@@ -2,6 +2,7 @@ package com.Backend.Chat.mapper;
 
 import com.Backend.Chat.dto.Message.MessageDTO;
 import com.Backend.Chat.entity.Message.Message;
+import com.Backend.User.dto.UserDTO;
 import jakarta.annotation.PostConstruct;
 import org.modelmapper.ModelMapper;
 import org.modelmapper.config.Configuration;
@@ -24,10 +25,23 @@ public class MessageMapper {
     }
 
     public MessageDTO convertToDTO(Message message) {
-        return modelMapper.map(message, MessageDTO.class);
+        MessageDTO dto = modelMapper.map(message, MessageDTO.class);
+        dto.setContent(message.getMessageContent());
+        dto.setChatId(message.getChat().getId());
+        dto.setClientMessageId(message.getClientMessageId());
+        dto.setDeletedAt(message.getDeletedAt());
+        if (message.getSender() != null) {
+            UserDTO sender = new UserDTO();
+            sender.setId(message.getSender().getId());
+            sender.setUsername(message.getSender().getUsername());
+            dto.setSender(sender);
+        }
+        return dto;
     }
 
     public Message convertToEntity(MessageDTO messageDTO) {
-        return modelMapper.map(messageDTO, Message.class);
+        Message message = modelMapper.map(messageDTO, Message.class);
+        message.setMessageContent(messageDTO.getContent());
+        return message;
     }
 }
