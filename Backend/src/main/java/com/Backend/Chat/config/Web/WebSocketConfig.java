@@ -1,6 +1,8 @@
 package com.Backend.Chat.config.Web;
 
 import com.Backend.Chat.Interceptor.ChatChannelInterceptor;
+import com.Backend.Chat.Interceptor.RateLimitingChannelInterceptor;
+import com.Backend.Chat.Interceptor.StompAuthenticationInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -55,11 +57,17 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Value("${spring.rabbitmq.password}")
     private String RABBITMQ_PASSWORD;
 
-    @Value("${app.cors.allowed-origins:https://your-frontend-domain.com,https://www.your-frontend-domain.com,http://localhost:3000,http://localhost:5173,http://localhost:8080}")
+    @Value("${app.cors.allowed-origins:http://localhost:3000}")
     private String[] allowedOrigins;
 
     @Autowired
     private ChatChannelInterceptor chatChannelInterceptor;
+
+    @Autowired
+    private StompAuthenticationInterceptor stompAuthenticationInterceptor;
+
+    @Autowired
+    private RateLimitingChannelInterceptor rateLimitingChannelInterceptor;
 
     /**
      * Registra los endpoints STOMP con SockJS.
@@ -106,7 +114,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(chatChannelInterceptor);
+        registration.interceptors(stompAuthenticationInterceptor, chatChannelInterceptor, rateLimitingChannelInterceptor);
     }
 
     private HandshakeHandler handshakeHandler() {

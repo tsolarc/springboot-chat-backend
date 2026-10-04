@@ -1,45 +1,50 @@
 package com.Backend.User.controller;
 
-import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import java.security.Principal;
 import org.springframework.web.bind.annotation.*;
 import com.Backend.User.dto.UserDTO;
+import com.Backend.User.dto.UserBasicDTO;
 import com.Backend.User.service.IUserService;
 
 @RestController
 @RequestMapping("/users")
 public class UserController {
 
-    @Autowired
-    private IUserService userService;
+    private final IUserService userService;
 
     public UserController(IUserService userService) {
         this.userService = userService;
     }
 
+    public record CreateUserRequest(@NotBlank String name, @NotBlank String username,
+                                    @NotBlank @Email String email, @NotBlank @Size(min = 8) String password) {}
+
     @PostMapping("/create")
-    public UserDTO createUser(@RequestBody UserDTO userDTO) {
-        return userService.saveUser(userDTO);
+    public UserBasicDTO createUser(@Valid @RequestBody CreateUserRequest request) {
+        UserDTO user = new UserDTO();
+        user.setName(request.name());
+        user.setUsername(request.username());
+        user.setEmail(request.email());
+        user.setPassword(request.password());
+        return toPublic(userService.saveUser(user));
     }
 
-    @GetMapping("/listUsers")
-    public List<UserDTO> getAllUsers() {
-        return userService.getAllUsers();
-    }
-
-    @PutMapping("/update/{id}")
-    public UserDTO updateUser(@PathVariable Long id, @RequestBody UserDTO userDTO) {
-        return userService.updateUser(id, userDTO);
-    }
-
-    @DeleteMapping("/delete/{id}")
-    public void deleteUser(@PathVariable Long id) {
-        userService.deleteUser(id);
+    @GetMapping("/me")
+    public UserBasicDTO me(Principal principal) {
+        return toPublic(userService.findByUsername(principal.getName()));
     }
 
     @GetMapping("/{id}")
-    public UserDTO getUserById(@PathVariable Long id) {
-        return userService.getUserById(id)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+    public UserBasicDTO getUserById(@PathVariable Long id) {
+        return toPublic(userService.getUserById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id)));
+    }
+
+    private UserBasicDTO toPublic(UserDTO user) {
+        return new UserBasicDTO(user.getId(), user.getName(), user.getUsername(), user.getLocation());
     }
 }

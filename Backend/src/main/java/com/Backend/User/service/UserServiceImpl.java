@@ -46,8 +46,17 @@ public class UserServiceImpl implements IUserService {
     @Override
     @Transactional
     public UserDTO saveUser(UserDTO userDTO) {
-        User user = userMapper.convertToEntity(userDTO);
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        if (userRepository.findByUsername(userDTO.getUsername()).isPresent()) {
+            throw new IllegalArgumentException("Username already exists");
+        }
+        if (userRepository.findByEmail(userDTO.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Email already exists");
+        }
+        User user = new User();
+        user.setName(userDTO.getName());
+        user.setUsername(userDTO.getUsername());
+        user.setEmail(userDTO.getEmail());
+        user.setPassword(passwordEncoder.encode(userDTO.getPassword()));
         log.info("User created successfully");
         return userMapper.convertToDto(userRepository.save(user));
     }
